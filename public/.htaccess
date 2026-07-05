@@ -1,0 +1,5 @@
+# Apache rewrite rules for static Next.js export (optional hosting support)
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)/$ /$1/index.html [L]
