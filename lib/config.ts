@@ -1,5 +1,6 @@
 export const UMBAR_API_BASE_URL = (
-  process.env.NEXT_PUBLIC_UMBAR_API_BASE_URL?.trim() || 'http://localhost:8080'
+  process.env.NEXT_PUBLIC_UMBAR_API_BASE_URL?.trim() ||
+  'https://umbar-api-staging-gz7hsuer7q-el.a.run.app'
 ).replace(/\/$/, '')
 
 /** Root path for all ops-admin routes on umbar-api. */
