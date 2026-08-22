@@ -19,8 +19,30 @@ export type AdminInstructor = {
   gender: string | null
   isActive: boolean
   activeClasses: number
+  signupGeo: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
+}
+
+export type AdminInstructorDeleteImpact = {
+  classesTotal: number
+  classesActive: number
+  classesCompleted: number
+  classesArchived: number
+  enrollments: number
+  attendanceRecords: number
+  conversations: number
+  ratings: number
+}
+
+export type AdminInstructorDeleteImpactResponse = {
+  success: true
+  instructor: {
+    id: string
+    name: string
+    email: string | null
+  }
+  impact: AdminInstructorDeleteImpact
 }
 
 export type AdminClass = {

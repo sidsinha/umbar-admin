@@ -48,6 +48,28 @@ export async function fetchAdminApiGet(path: string): Promise<AdminApiResult> {
   return parseAdminApiResponse(response, text)
 }
 
+export async function fetchAdminApiDelete(path: string): Promise<AdminApiResult> {
+  const response = await fetch(buildUrl(path), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  const text = await response.text()
+  return parseAdminApiResponse(response, text)
+}
+
+export async function fetchAdminApiPost(
+  path: string,
+  body: Record<string, unknown>,
+): Promise<AdminApiResult> {
+  const response = await fetch(buildUrl(path), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify(body),
+  })
+  const text = await response.text()
+  return parseAdminApiResponse(response, text)
+}
+
 export async function fetchAdminLogin(password: string): Promise<{ token: string; expiresAt: number }> {
   const response = await fetch(buildUrl(`${ADMIN_OPS_ROOT}/auth/login`), {
     method: 'POST',

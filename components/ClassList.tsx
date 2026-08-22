@@ -1,18 +1,38 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2 } from 'lucide-react'
 
 import DataTable from '@/components/DataTable'
 import ListFiltersBar from '@/components/ListFiltersBar'
 import PaginationControls from '@/components/PaginationControls'
-import { fetchAdminClasses } from '@/lib/admin-ops-api-client'
+import { Switch } from '@/components/ui/switch'
+import {
+  fetchAdminClasses,
+  setAdminClassMarketplaceVisibility,
+} from '@/lib/admin-ops-api-client'
+import type { AdminClass } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
-import { formatClassLocation, formatDate } from '@/utils'
+import { cn, formatClassLocation, formatDate } from '@/utils'
+
+function canToggleMarketplace(status: string): boolean {
+  return status === 'active' || status === 'disabled'
+}
+
+function formatClassStatus(status: string): string {
+  if (status === 'active') return 'Active'
+  if (status === 'disabled') return 'Disabled'
+  if (status === 'completed') return 'Completed'
+  return status
+}
 
 export default function ClassList() {
+  const queryClient = useQueryClient()
   const [emailFilter, setEmailFilter] = useState('')
   const [appliedEmail, setAppliedEmail] = useState('')
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [togglingClassId, setTogglingClassId] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
     useCursorPagination()
 
@@ -30,9 +50,37 @@ export default function ClassList() {
       }),
   })
 
+  const visibilityMutation = useMutation({
+    mutationFn: ({ classId, enabled }: { classId: string; enabled: boolean }) =>
+      setAdminClassMarketplaceVisibility(classId, enabled),
+    onMutate: ({ classId }) => {
+      setTogglingClassId(classId)
+      setActionError(null)
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['admin-classes'] }),
+        queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
+      ])
+    },
+    onError: (error) => {
+      setActionError(
+        error instanceof Error ? error.message : 'Failed to update marketplace visibility.',
+      )
+    },
+    onSettled: () => {
+      setTogglingClassId(null)
+    },
+  })
+
   function handleApply() {
     setAppliedEmail(emailFilter.trim())
     resetPaging()
+  }
+
+  function handleToggle(item: AdminClass, enabled: boolean) {
+    if (!canToggleMarketplace(item.status)) return
+    visibilityMutation.mutate({ classId: item.id, enabled })
   }
 
   const items = listQuery.data?.items ?? []
@@ -62,20 +110,66 @@ export default function ClassList() {
         </p>
       ) : null}
 
+      {actionError ? (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {actionError}
+        </p>
+      ) : null}
+
       <DataTable
-        columns={['Name', 'Instructor', 'Category', 'Location', 'Enrolled', 'Status', 'Created']}
+        columns={[
+          'Name',
+          'Instructor',
+          'Category',
+          'Location',
+          'Enrolled',
+          'Marketplace',
+          'Status',
+          'Created',
+        ]}
       >
-        {items.map((item) => (
-          <tr key={item.id}>
-            <td className="px-4 py-3">{item.name}</td>
-            <td className="px-4 py-3">{item.instructorName ?? item.instructorEmail ?? '—'}</td>
-            <td className="px-4 py-3">{item.category ?? '—'}</td>
-            <td className="px-4 py-3">{formatClassLocation(item.location)}</td>
-            <td className="px-4 py-3">{item.currentEnrollments}</td>
-            <td className="px-4 py-3 capitalize">{item.status}</td>
-            <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
-          </tr>
-        ))}
+        {items.map((item) => {
+          const isToggling = togglingClassId === item.id
+          const toggleable = canToggleMarketplace(item.status)
+          const isEnabled = item.status === 'active'
+
+          return (
+            <tr key={item.id}>
+              <td className="px-4 py-3">{item.name}</td>
+              <td className="px-4 py-3">{item.instructorName ?? item.instructorEmail ?? '—'}</td>
+              <td className="px-4 py-3">{item.category ?? '—'}</td>
+              <td className="px-4 py-3">{formatClassLocation(item.location)}</td>
+              <td className="px-4 py-3">{item.currentEnrollments}</td>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2">
+                  {isToggling ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />
+                  ) : null}
+                  <Switch
+                    id={`marketplace-${item.id}`}
+                    checked={isEnabled}
+                    disabled={!toggleable || isToggling || visibilityMutation.isPending}
+                    onCheckedChange={(enabled) => handleToggle(item, enabled)}
+                    aria-label={`${isEnabled ? 'Hide' : 'Show'} ${item.name} on marketplace`}
+                  />
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={cn(
+                    'inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+                    item.status === 'active' && 'bg-emerald-100 text-emerald-900',
+                    item.status === 'disabled' && 'bg-muted text-muted-foreground',
+                    item.status === 'completed' && 'bg-amber-100 text-amber-900',
+                  )}
+                >
+                  {formatClassStatus(item.status)}
+                </span>
+              </td>
+              <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
+            </tr>
+          )
+        })}
       </DataTable>
 
       <PaginationControls

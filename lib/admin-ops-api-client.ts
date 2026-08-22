@@ -2,11 +2,12 @@ import type {
   AdminClass,
   AdminInquiry,
   AdminInstructor,
+  AdminInstructorDeleteImpactResponse,
   AdminListResult,
   AdminStatsResponse,
   AdminStudent,
 } from '@/lib/admin-types'
-import { fetchAdminApiGet } from '@/lib/fetch-admin-api'
+import { fetchAdminApiDelete, fetchAdminApiGet, fetchAdminApiPost } from '@/lib/fetch-admin-api'
 import { ADMIN_OPS_ROOT } from '@/lib/config'
 
 export type ListQueryParams = {
@@ -40,11 +41,40 @@ export async function fetchAdminInstructors(
   return payload as unknown as AdminListResult<AdminInstructor>
 }
 
+export async function fetchAdminInstructorDeleteImpact(
+  instructorId: string,
+): Promise<AdminInstructorDeleteImpactResponse> {
+  const payload = await fetchAdminApiGet(
+    `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}/delete-impact`,
+  )
+  return payload as unknown as AdminInstructorDeleteImpactResponse
+}
+
+export async function deleteAdminInstructor(
+  instructorId: string,
+): Promise<{ success: true; deletedId: string }> {
+  const payload = await fetchAdminApiDelete(
+    `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}`,
+  )
+  return payload as unknown as { success: true; deletedId: string }
+}
+
 export async function fetchAdminClasses(
   params: ListQueryParams = {},
 ): Promise<AdminListResult<AdminClass>> {
   const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/classes${buildQuery(params)}`)
   return payload as unknown as AdminListResult<AdminClass>
+}
+
+export async function setAdminClassMarketplaceVisibility(
+  classId: string,
+  enabled: boolean,
+): Promise<{ success: true; class: { id: string; status: string } }> {
+  const payload = await fetchAdminApiPost(
+    `${ADMIN_OPS_ROOT}/classes/${encodeURIComponent(classId)}/marketplace-visibility`,
+    { enabled },
+  )
+  return payload as unknown as { success: true; class: { id: string; status: string } }
 }
 
 export async function fetchAdminStudents(

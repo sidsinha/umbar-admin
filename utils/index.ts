@@ -29,6 +29,15 @@ export function formatClassLocation(location: Record<string, unknown> | null | u
   return parts.length > 0 ? parts.join(', ') : '—'
 }
 
+export function formatSignupGeo(signupGeo: Record<string, unknown> | null | undefined) {
+  if (!signupGeo) return '—'
+  const city = typeof signupGeo.city === 'string' ? signupGeo.city : null
+  const countryCode = typeof signupGeo.countryCode === 'string' ? signupGeo.countryCode : null
+  const region = typeof signupGeo.region === 'string' ? signupGeo.region : null
+  const parts = [city, region, countryCode].filter(Boolean)
+  return parts.length > 0 ? parts.join(', ') : '—'
+}
+
 export function statusPillClass(active: boolean) {
   return active
     ? 'bg-emerald-100 text-emerald-900'
