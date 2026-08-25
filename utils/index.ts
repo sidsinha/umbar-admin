@@ -38,6 +38,21 @@ export function formatSignupGeo(signupGeo: Record<string, unknown> | null | unde
   return parts.length > 0 ? parts.join(', ') : '—'
 }
 
+export function formatSignupSource(signupSource: Record<string, unknown> | null | undefined) {
+  if (!signupSource) return '—'
+  const channel = typeof signupSource.channel === 'string' ? signupSource.channel : null
+  if (channel === 'app') return 'App'
+  if (channel === 'organic') return 'Web (organic)'
+  if (channel === 'ppc') return 'Web (PPC)'
+  return '—'
+}
+
+export function formatClassCreatedFrom(createdFrom: 'website' | 'app' | null | undefined) {
+  if (createdFrom === 'website') return 'Website'
+  if (createdFrom === 'app') return 'App'
+  return '—'
+}
+
 export function statusPillClass(active: boolean) {
   return active
     ? 'bg-emerald-100 text-emerald-900'

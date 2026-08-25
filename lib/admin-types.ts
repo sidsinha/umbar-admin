@@ -19,7 +19,9 @@ export type AdminInstructor = {
   gender: string | null
   isActive: boolean
   activeClasses: number
+  activeClassSubjects: string[]
   signupGeo: Record<string, unknown> | null
+  signupSource: Record<string, unknown> | null
   createdAt: string
   updatedAt: string
 }
@@ -55,8 +57,72 @@ export type AdminClass = {
   status: string
   currentEnrollments: number
   gaPageViewCount: number
+  createdFrom: 'website' | 'app' | null
   createdAt: string
   updatedAt: string
+}
+
+export type ClassDefaultFee = {
+  basis: 'per_class' | 'per_month'
+  amount: number
+  currency: string
+}
+
+export type ClassLocation = {
+  city?: string | null
+  state?: string | null
+  country?: string | null
+  areaLabel?: string | null
+  placeId?: string | null
+  locationText?: string | null
+  formattedAddress?: string | null
+  locality?: string | null
+  lat?: number | null
+  lng?: number | null
+}
+
+export type AdminClassDetail = {
+  id: string
+  name: string
+  description: string
+  whatStudentsWillLearn: string
+  classType: string
+  location: ClassLocation | null
+  videoLink: string | null
+  classLogo: string | null
+  hasTrialClass: boolean
+  category: string | null
+  categoryId: string | null
+  subcategoryId: string | null
+  tags: string[]
+  status: string
+  defaultFee: ClassDefaultFee | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export type AdminClassDetailResponse = {
+  success: true
+  class: AdminClassDetail
+  instructorName: string | null
+  instructorEmail: string | null
+}
+
+export type AdminClassUpdateBody = {
+  name: string
+  description: string
+  whatStudentsWillLearn: string
+  classType: string
+  location: ClassLocation | null
+  videoLink: string | null
+  classLogo?: string | null
+  hasTrialClass: boolean
+  category?: string
+  categoryId?: string
+  subcategoryId?: string
+  tags: string[]
+  status: string
+  defaultFee?: ClassDefaultFee | null
 }
 
 export type AdminStudent = {

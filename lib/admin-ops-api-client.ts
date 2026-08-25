@@ -1,5 +1,7 @@
 import type {
   AdminClass,
+  AdminClassDetailResponse,
+  AdminClassUpdateBody,
   AdminInquiry,
   AdminInstructor,
   AdminInstructorDeleteImpactResponse,
@@ -16,6 +18,8 @@ export type ListQueryParams = {
   email?: string
   instructorEmail?: string
   classId?: string
+  signupSource?: string
+  signupLocation?: string
 }
 
 function buildQuery(params: ListQueryParams): string {
@@ -25,6 +29,8 @@ function buildQuery(params: ListQueryParams): string {
   if (params.email) search.set('email', params.email)
   if (params.instructorEmail) search.set('instructorEmail', params.instructorEmail)
   if (params.classId) search.set('classId', params.classId)
+  if (params.signupSource) search.set('signupSource', params.signupSource)
+  if (params.signupLocation) search.set('signupLocation', params.signupLocation)
   const query = search.toString()
   return query ? `?${query}` : ''
 }
@@ -39,6 +45,11 @@ export async function fetchAdminInstructors(
 ): Promise<AdminListResult<AdminInstructor>> {
   const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/instructors${buildQuery(params)}`)
   return payload as unknown as AdminListResult<AdminInstructor>
+}
+
+export async function fetchAdminInstructorSignupCities(): Promise<{ success: true; cities: string[] }> {
+  const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/instructors/signup-cities`)
+  return payload as unknown as { success: true; cities: string[] }
 }
 
 export async function fetchAdminInstructorDeleteImpact(
@@ -75,6 +86,24 @@ export async function setAdminClassMarketplaceVisibility(
     { enabled },
   )
   return payload as unknown as { success: true; class: { id: string; status: string } }
+}
+
+export async function fetchAdminClass(classId: string): Promise<AdminClassDetailResponse> {
+  const payload = await fetchAdminApiGet(
+    `${ADMIN_OPS_ROOT}/classes/${encodeURIComponent(classId)}`,
+  )
+  return payload as unknown as AdminClassDetailResponse
+}
+
+export async function updateAdminClass(
+  classId: string,
+  body: AdminClassUpdateBody,
+): Promise<{ success: true; class: AdminClassDetailResponse['class'] }> {
+  const payload = await fetchAdminApiPost(
+    `${ADMIN_OPS_ROOT}/classes/${encodeURIComponent(classId)}/update`,
+    body as unknown as Record<string, unknown>,
+  )
+  return payload as unknown as { success: true; class: AdminClassDetailResponse['class'] }
 }
 
 export async function fetchAdminStudents(

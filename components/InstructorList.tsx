@@ -5,17 +5,25 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DataTable from '@/components/DataTable'
-import ListFiltersBar from '@/components/ListFiltersBar'
+import InstructorFiltersBar, { type SignupSourceFilter } from '@/components/InstructorFiltersBar'
 import PaginationControls from '@/components/PaginationControls'
 import { Button } from '@/components/ui/button'
 import {
   deleteAdminInstructor,
   fetchAdminInstructorDeleteImpact,
+  fetchAdminInstructorSignupCities,
   fetchAdminInstructors,
 } from '@/lib/admin-ops-api-client'
 import type { AdminInstructor, AdminInstructorDeleteImpactResponse } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
-import { cn, displayPersonName, formatDate, formatSignupGeo, statusPillClass } from '@/utils'
+import {
+  cn,
+  displayPersonName,
+  formatDate,
+  formatSignupGeo,
+  formatSignupSource,
+  statusPillClass,
+} from '@/utils'
 
 function ImpactRow({
   label,
@@ -45,6 +53,10 @@ export default function InstructorList() {
   const queryClient = useQueryClient()
   const [emailFilter, setEmailFilter] = useState('')
   const [appliedEmail, setAppliedEmail] = useState('')
+  const [signupSourceFilter, setSignupSourceFilter] = useState<SignupSourceFilter>('')
+  const [appliedSignupSource, setAppliedSignupSource] = useState<SignupSourceFilter>('')
+  const [signupLocationFilter, setSignupLocationFilter] = useState('')
+  const [appliedSignupLocation, setAppliedSignupLocation] = useState('')
   const [pendingDelete, setPendingDelete] = useState<AdminInstructor | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
@@ -52,16 +64,33 @@ export default function InstructorList() {
 
   useEffect(() => {
     resetPaging()
-  }, [appliedEmail, limit, resetPaging])
+  }, [appliedEmail, appliedSignupSource, appliedSignupLocation, limit, resetPaging])
 
   const listQuery = useQuery({
-    queryKey: ['admin-instructors', appliedEmail, limit, currentCursor],
+    queryKey: [
+      'admin-instructors',
+      appliedEmail,
+      appliedSignupSource,
+      appliedSignupLocation,
+      limit,
+      currentCursor,
+    ],
     queryFn: () =>
       fetchAdminInstructors({
         email: appliedEmail || undefined,
+        signupSource: appliedSignupSource || undefined,
+        signupLocation: appliedSignupLocation || undefined,
         limit,
         cursor: currentCursor,
       }),
+  })
+
+  const citiesQuery = useQuery({
+    queryKey: ['admin-instructor-signup-cities'],
+    queryFn: async () => {
+      const result = await fetchAdminInstructorSignupCities()
+      return result.cities
+    },
   })
 
   const impactQuery = useQuery({
@@ -87,6 +116,8 @@ export default function InstructorList() {
 
   function handleApply() {
     setAppliedEmail(emailFilter.trim())
+    setAppliedSignupSource(signupSourceFilter)
+    setAppliedSignupLocation(signupLocationFilter.trim())
     resetPaging()
   }
 
@@ -116,10 +147,15 @@ export default function InstructorList() {
         </p>
       </div>
 
-      <ListFiltersBar
-        filterLabel="Filter by email"
-        filterValue={emailFilter}
-        onFilterChange={setEmailFilter}
+      <InstructorFiltersBar
+        email={emailFilter}
+        onEmailChange={setEmailFilter}
+        signupSource={signupSourceFilter}
+        onSignupSourceChange={setSignupSourceFilter}
+        signupLocation={signupLocationFilter}
+        onSignupLocationChange={setSignupLocationFilter}
+        signupCities={citiesQuery.data ?? []}
+        citiesLoading={citiesQuery.isLoading}
         limit={limit}
         onLimitChange={setLimit}
         onApply={handleApply}
@@ -138,12 +174,13 @@ export default function InstructorList() {
       <DataTable
         columns={[
           'Name',
-          'Email',
           'Phone',
+          'Source',
           'Signup location',
           'Gender',
           'Status',
           'Active classes',
+          'Subjects',
           'Created',
           'Actions',
         ]}
@@ -151,8 +188,8 @@ export default function InstructorList() {
         {items.map((item) => (
           <tr key={item.id}>
             <td className="px-4 py-3">{displayPersonName(item)}</td>
-            <td className="px-4 py-3">{item.email ?? '—'}</td>
             <td className="px-4 py-3">{item.phoneNumber ?? '—'}</td>
+            <td className="px-4 py-3">{formatSignupSource(item.signupSource)}</td>
             <td className="px-4 py-3">{formatSignupGeo(item.signupGeo)}</td>
             <td className="px-4 py-3 capitalize">{item.gender ?? '—'}</td>
             <td className="px-4 py-3">
@@ -161,6 +198,9 @@ export default function InstructorList() {
               </span>
             </td>
             <td className="px-4 py-3">{item.activeClasses}</td>
+            <td className="px-4 py-3">
+              {item.activeClassSubjects?.length ? item.activeClassSubjects.join(', ') : '—'}
+            </td>
             <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
             <td className="px-4 py-3">
               <Button

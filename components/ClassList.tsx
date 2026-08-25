@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
+import ClassEditDialog from '@/components/classes/ClassEditDialog'
 import DataTable from '@/components/DataTable'
 import ListFiltersBar from '@/components/ListFiltersBar'
 import PaginationControls from '@/components/PaginationControls'
+import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import {
   fetchAdminClasses,
@@ -14,7 +16,7 @@ import {
 } from '@/lib/admin-ops-api-client'
 import type { AdminClass } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
-import { cn, formatClassLocation, formatDate } from '@/utils'
+import { cn, formatClassCreatedFrom, formatClassLocation, formatDate } from '@/utils'
 
 function canToggleMarketplace(status: string): boolean {
   return status === 'active' || status === 'disabled'
@@ -33,6 +35,7 @@ export default function ClassList() {
   const [appliedEmail, setAppliedEmail] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [togglingClassId, setTogglingClassId] = useState<string | null>(null)
+  const [editingClassId, setEditingClassId] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
     useCursorPagination()
 
@@ -126,7 +129,9 @@ export default function ClassList() {
           'Views',
           'Marketplace',
           'Status',
+          'Created from',
           'Created',
+          'Actions',
         ]}
       >
         {items.map((item) => {
@@ -170,7 +175,13 @@ export default function ClassList() {
                   {formatClassStatus(item.status)}
                 </span>
               </td>
+              <td className="px-4 py-3">{formatClassCreatedFrom(item.createdFrom)}</td>
               <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
+              <td className="px-4 py-3">
+                <Button variant="outline" size="sm" onClick={() => setEditingClassId(item.id)}>
+                  Edit
+                </Button>
+              </td>
             </tr>
           )
         })}
@@ -184,6 +195,8 @@ export default function ClassList() {
         onPrev={goPrev}
         onNext={() => goNext(listQuery.data?.pagination.nextCursor ?? null)}
       />
+
+      <ClassEditDialog classId={editingClassId} onClose={() => setEditingClassId(null)} />
     </div>
   )
 }
