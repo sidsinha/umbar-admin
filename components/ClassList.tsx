@@ -123,6 +123,7 @@ export default function ClassList() {
           'Category',
           'Location',
           'Enrolled',
+          'Views',
           'Marketplace',
           'Status',
           'Created',
@@ -140,6 +141,9 @@ export default function ClassList() {
               <td className="px-4 py-3">{item.category ?? '—'}</td>
               <td className="px-4 py-3">{formatClassLocation(item.location)}</td>
               <td className="px-4 py-3">{item.currentEnrollments}</td>
+              <td className="px-4 py-3" title="GA4 page views (lifetime)">
+                {(item.gaPageViewCount ?? 0).toLocaleString()}
+              </td>
               <td className="px-4 py-3">
                 <div className="flex items-center gap-2">
                   {isToggling ? (

@@ -54,6 +54,7 @@ export type AdminClass = {
   location: Record<string, unknown> | null
   status: string
   currentEnrollments: number
+  gaPageViewCount: number
   createdAt: string
   updatedAt: string
 }
