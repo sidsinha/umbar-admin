@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DataTable from '@/components/DataTable'
+import InstructorDashboardUsagePanel from '@/components/InstructorDashboardUsagePanel'
 import InstructorFiltersBar, { type SignupSourceFilter } from '@/components/InstructorFiltersBar'
 import PaginationControls from '@/components/PaginationControls'
 import { Button } from '@/components/ui/button'
@@ -58,6 +59,7 @@ export default function InstructorList() {
   const [signupLocationFilter, setSignupLocationFilter] = useState('')
   const [appliedSignupLocation, setAppliedSignupLocation] = useState('')
   const [pendingDelete, setPendingDelete] = useState<AdminInstructor | null>(null)
+  const [usageInstructor, setUsageInstructor] = useState<AdminInstructor | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
     useCursorPagination()
@@ -180,6 +182,8 @@ export default function InstructorList() {
           'Gender',
           'Status',
           'Active classes',
+          'Dashboard views',
+          'Last active',
           'Subjects',
           'Created',
           'Actions',
@@ -198,19 +202,34 @@ export default function InstructorList() {
               </span>
             </td>
             <td className="px-4 py-3">{item.activeClasses}</td>
+            <td className="px-4 py-3" title="GA4 dashboard_page_view events (last 30 days)">
+              {(item.dashboardPageViews30d ?? 0).toLocaleString()}
+            </td>
+            <td className="px-4 py-3">
+              {item.lastDashboardVisitAt ? formatDate(item.lastDashboardVisitAt) : '—'}
+            </td>
             <td className="px-4 py-3">
               {item.activeClassSubjects?.length ? item.activeClassSubjects.join(', ') : '—'}
             </td>
             <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
             <td className="px-4 py-3">
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => openDeleteDialog(item)}
-                disabled={deleteMutation.isPending}
-              >
-                Delete
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setUsageInstructor(item)}
+                >
+                  Stats
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => openDeleteDialog(item)}
+                  disabled={deleteMutation.isPending}
+                >
+                  Delete
+                </Button>
+              </div>
             </td>
           </tr>
         ))}
@@ -223,6 +242,11 @@ export default function InstructorList() {
         hasNext={Boolean(listQuery.data?.pagination.hasMore)}
         onPrev={goPrev}
         onNext={() => goNext(listQuery.data?.pagination.nextCursor ?? null)}
+      />
+
+      <InstructorDashboardUsagePanel
+        instructor={usageInstructor}
+        onClose={() => setUsageInstructor(null)}
       />
 
       <ConfirmDialog

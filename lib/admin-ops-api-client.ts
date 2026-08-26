@@ -4,6 +4,7 @@ import type {
   AdminClassUpdateBody,
   AdminInquiry,
   AdminInstructor,
+  AdminInstructorDashboardUsageResponse,
   AdminInstructorDeleteImpactResponse,
   AdminListResult,
   AdminStatsResponse,
@@ -59,6 +60,16 @@ export async function fetchAdminInstructorDeleteImpact(
     `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}/delete-impact`,
   )
   return payload as unknown as AdminInstructorDeleteImpactResponse
+}
+
+export async function fetchAdminInstructorDashboardUsage(
+  instructorId: string,
+  days: 7 | 30 | 90 = 30,
+): Promise<AdminInstructorDashboardUsageResponse> {
+  const payload = await fetchAdminApiGet(
+    `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}/dashboard-usage?days=${days}`,
+  )
+  return payload as unknown as AdminInstructorDashboardUsageResponse
 }
 
 export async function deleteAdminInstructor(

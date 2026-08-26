@@ -2,51 +2,424 @@
 
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowRight, BookOpen, GraduationCap, MessageSquare, Users } from 'lucide-react'
+import {
+  ArrowRight,
+  BookOpen,
+  GraduationCap,
+  LayoutDashboard,
+  MessageSquare,
+  Users,
+} from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { fetchAdminStats } from '@/lib/admin-ops-api-client'
-import { cn } from '@/utils'
+import type { AdminStats } from '@/lib/admin-types'
+import { cn, formatDate } from '@/utils'
 
-const CARDS = [
+type CardMetric = {
+  label: string
+  value: string | number
+}
+
+type StatsCard = {
+  key: string
+  title: string
+  href: string
+  icon: typeof Users
+  iconClassName: string
+  total: (stats: AdminStats) => number
+  metrics: (stats: AdminStats) => CardMetric[]
+}
+
+const CARDS: StatsCard[] = [
   {
-    key: 'instructors' as const,
+    key: 'instructors',
     title: 'Instructors',
     href: '/instructors/',
     icon: Users,
-    detail: (stats: Awaited<ReturnType<typeof fetchAdminStats>>['stats']) =>
-      `${stats.instructors.active} active · ${stats.instructors.inactive} inactive`,
+    iconClassName: 'bg-secondary text-secondary-foreground',
+    total: (stats) => stats.instructors.total,
+    metrics: (stats) => [
+      { label: 'active', value: stats.instructors.active },
+      { label: 'inactive', value: stats.instructors.inactive },
+      {
+        label: 'used dashboard (7d)',
+        value: stats.dashboardUsage?.activeInstructors7d ?? 0,
+      },
+    ],
   },
   {
-    key: 'classes' as const,
+    key: 'classes',
     title: 'Classes',
     href: '/classes/',
     icon: BookOpen,
-    detail: (stats: Awaited<ReturnType<typeof fetchAdminStats>>['stats']) =>
-      `${stats.classes.active} active · ${stats.classes.completed} completed · ${stats.classes.archived} archived`,
+    iconClassName: 'bg-accent/15 text-accent',
+    total: (stats) => stats.classes.total,
+    metrics: (stats) => [
+      { label: 'active', value: stats.classes.active },
+      { label: 'completed', value: stats.classes.completed },
+      { label: 'archived', value: stats.classes.archived },
+    ],
   },
   {
-    key: 'students' as const,
+    key: 'students',
     title: 'Students',
     href: '/students/',
     icon: GraduationCap,
-    detail: (stats: Awaited<ReturnType<typeof fetchAdminStats>>['stats']) =>
-      `${stats.students.active} active · ${stats.students.inactive} inactive`,
+    iconClassName: 'bg-muted text-foreground',
+    total: (stats) => stats.students.total,
+    metrics: (stats) => [
+      { label: 'active', value: stats.students.active },
+      { label: 'inactive', value: stats.students.inactive },
+    ],
   },
   {
-    key: 'inquiries' as const,
+    key: 'inquiries',
     title: 'Inquiries',
     href: '/inquiries/',
     icon: MessageSquare,
-    detail: (stats: Awaited<ReturnType<typeof fetchAdminStats>>['stats']) =>
-      `${stats.inquiries.last7Days} in the last 7 days`,
+    iconClassName: 'bg-primary/8 text-primary',
+    total: (stats) => stats.inquiries.total,
+    metrics: (stats) => [{ label: 'in the last 7 days', value: stats.inquiries.last7Days }],
+  },
+  {
+    key: 'instructor-dashboard',
+    title: 'Instructor dashboard',
+    href: '/instructors/',
+    icon: LayoutDashboard,
+    iconClassName: 'bg-accent/25 text-accent-foreground',
+    total: (stats) => stats.dashboardUsage?.activeInstructors7d ?? 0,
+    metrics: (stats) => [
+      {
+        label: 'page views (7d)',
+        value: (stats.dashboardUsage?.pageViews7d ?? 0).toLocaleString(),
+      },
+    ],
   },
 ]
+
+const CARD_GRID_CLASS = 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5'
+
+function StatCard({
+  title,
+  href,
+  icon: Icon,
+  iconClassName,
+  total,
+  metrics,
+}: {
+  title: string
+  href: string
+  icon: typeof Users
+  iconClassName: string
+  total: number
+  metrics: CardMetric[]
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'group flex min-h-[11.5rem] flex-col rounded-xl border border-border bg-card p-5 shadow-sm',
+        'transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-md',
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-medium leading-snug text-muted-foreground">{title}</p>
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105',
+            iconClassName,
+          )}
+        >
+          <Icon className="h-[1.125rem] w-[1.125rem]" aria-hidden />
+        </div>
+      </div>
+
+      <p className="mt-4 text-3xl font-bold tracking-tight tabular-nums text-foreground">
+        {total.toLocaleString()}
+      </p>
+
+      <ul className="mt-3 space-y-1">
+        {metrics.map((metric) => (
+          <li key={metric.label} className="text-xs leading-relaxed text-muted-foreground">
+            <span className="font-semibold tabular-nums text-foreground">
+              {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
+            </span>{' '}
+            {metric.label}
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-medium text-accent transition-colors group-hover:text-accent/80">
+        View all
+        <ArrowRight
+          className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+          aria-hidden
+        />
+      </p>
+    </Link>
+  )
+}
+
+function formatAdoption(stats: AdminStats): string {
+  const active = stats.dashboardUsage?.activeInstructors7d ?? 0
+  const activeInstructors = stats.instructors.active
+  if (activeInstructors <= 0) return '—'
+  const percent = Math.round((active / activeInstructors) * 100)
+  return `${active} of ${activeInstructors} active instructors (${percent}%)`
+}
+
+function formatScreenLabel(screenName: string): string {
+  return screenName.replace(/_/g, ' ')
+}
+
+function DashboardUsageSummary({ stats }: { stats: AdminStats }) {
+  const active = stats.dashboardUsage?.activeInstructors7d ?? 0
+  const pageViews = stats.dashboardUsage?.pageViews7d ?? 0
+  const navClicks = stats.dashboardUsage?.navClicks7d ?? 0
+  const actions = stats.dashboardUsage?.actions7d ?? 0
+  const instructors = stats.dashboardUsage?.instructors ?? []
+  const instructorIdentitiesAvailable =
+    stats.dashboardUsage?.instructorIdentitiesAvailable ?? false
+  const screens = (stats.dashboardUsage?.screens ?? []).slice(0, 10)
+  const navItems = stats.dashboardUsage?.navItems ?? []
+  const actionItems = stats.dashboardUsage?.actionItems ?? []
+  const maxScreenViews = Math.max(...screens.map((row) => row.count), 1)
+  const maxNavClicks = Math.max(...navItems.map((row) => row.count), 1)
+  const maxActions = Math.max(...actionItems.map((row) => row.count), 1)
+
+  return (
+    <section className="mt-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+      <h3 className="text-base font-semibold text-foreground">
+        Instructor dashboard usage (last 7 days)
+      </h3>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Active instructors
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+            {active.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Page views
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+            {pageViews.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Nav clicks
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+            {navClicks.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Button / actions
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+            {actions.toLocaleString()}
+          </p>
+        </div>
+      </div>
+      <p className="mt-4 text-sm text-foreground">
+        Adoption: <span className="font-medium">{formatAdoption(stats)}</span>
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Source: GA4 instructor dashboard events · cached ~1h
+      </p>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold text-foreground">Active instructors</h4>
+        {instructors.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            {!instructorIdentitiesAvailable && pageViews > 0
+              ? 'Page views are tracked, but instructor names need GA4 User-ID reporting enabled (Admin → Data display → Reporting identity). After enabling, instructors must sign in again so events include their user ID.'
+              : active > 0
+                ? 'Instructor names are not available yet. Enable User-ID reporting in GA4 Admin if this persists.'
+                : 'No instructors used the dashboard in this period.'}
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Name</th>
+                  <th className="px-3 py-2 font-medium text-right">Views (7d)</th>
+                  <th className="px-3 py-2 font-medium">Last active</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instructors.map((row) => (
+                  <tr key={row.instructorId} className="border-b border-border/60 last:border-0">
+                    <td className="px-3 py-2">
+                      <Link
+                        href="/instructors/"
+                        className="font-medium text-foreground hover:text-accent hover:underline"
+                      >
+                        {row.name}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-foreground">
+                      {row.pageViews.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {row.lastActiveDate ? formatDate(row.lastActiveDate) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold text-foreground">Nav clicks</h4>
+        {navItems.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">No nav clicks in this period yet.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Nav item</th>
+                  <th className="px-3 py-2 font-medium text-right">Clicks</th>
+                  <th className="hidden w-40 px-3 py-2 font-medium sm:table-cell">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {navItems.map((row) => (
+                  <tr key={row.navItem} className="border-b border-border/60 last:border-0">
+                    <td className="px-3 py-2 text-foreground">{row.navItem}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-foreground">
+                      {row.count.toLocaleString()}
+                    </td>
+                    <td className="hidden px-3 py-2 sm:table-cell">
+                      <div className="h-2 rounded-full bg-muted">
+                        <div
+                          className={cn('h-2 rounded-full bg-primary')}
+                          style={{
+                            width: `${Math.max((row.count / maxNavClicks) * 100, row.count > 0 ? 4 : 0)}%`,
+                          }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold text-foreground">Button &amp; actions</h4>
+        {actionItems.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">No action events in this period yet.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Action</th>
+                  <th className="px-3 py-2 font-medium text-right">Count</th>
+                  <th className="hidden w-40 px-3 py-2 font-medium sm:table-cell">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {actionItems.map((row) => (
+                  <tr key={row.action} className="border-b border-border/60 last:border-0">
+                    <td className="px-3 py-2 capitalize text-foreground">{row.action}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-foreground">
+                      {row.count.toLocaleString()}
+                    </td>
+                    <td className="hidden px-3 py-2 sm:table-cell">
+                      <div className="h-2 rounded-full bg-muted">
+                        <div
+                          className={cn('h-2 rounded-full bg-primary')}
+                          style={{
+                            width: `${Math.max((row.count / maxActions) * 100, row.count > 0 ? 4 : 0)}%`,
+                          }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <h4 className="text-sm font-semibold text-foreground">Views by page</h4>
+        {screens.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">
+            No page views in this period yet.
+          </p>
+        ) : (
+          <div className="mt-3 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-muted-foreground">
+                  <th className="px-3 py-2 font-medium">Page title</th>
+                  <th className="px-3 py-2 font-medium">Screen</th>
+                  <th className="px-3 py-2 font-medium text-right">Views</th>
+                  <th className="hidden w-40 px-3 py-2 font-medium sm:table-cell">Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {screens.map((row) => {
+                  const title = row.pageTitle || formatScreenLabel(row.screenName)
+                  return (
+                    <tr key={`${row.screenName}-${row.pageTitle}`} className="border-b border-border/60 last:border-0">
+                      <td className="px-3 py-2 text-foreground">{title}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{row.screenName}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-foreground">
+                        {row.count.toLocaleString()}
+                      </td>
+                      <td className="hidden px-3 py-2 sm:table-cell">
+                        <div className="h-2 rounded-full bg-muted">
+                          <div
+                            className={cn('h-2 rounded-full bg-primary')}
+                            style={{
+                              width: `${Math.max((row.count / maxScreenViews) * 100, row.count > 0 ? 4 : 0)}%`,
+                            }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <Button asChild variant="outline" size="sm" className="mt-4">
+        <Link href="/instructors/" className="inline-flex items-center gap-1">
+          View instructors
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      </Button>
+    </section>
+  )
+}
 
 export default function Dashboard() {
   const statsQuery = useQuery({
     queryKey: ['admin-stats'],
     queryFn: fetchAdminStats,
   })
+
+  const skeletonCount = CARDS.length
 
   return (
     <div>
@@ -56,9 +429,22 @@ export default function Dashboard() {
       </div>
 
       {statsQuery.isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {CARDS.map((card) => (
-            <div key={card.key} className="h-36 animate-pulse rounded-xl bg-muted" />
+        <div className={CARD_GRID_CLASS}>
+          {Array.from({ length: skeletonCount }, (_, index) => (
+            <div
+              key={index}
+              className="min-h-[11.5rem] animate-pulse rounded-xl border border-border bg-card p-5"
+            >
+              <div className="flex items-start justify-between">
+                <div className="h-4 w-20 rounded bg-muted" />
+                <div className="h-9 w-9 rounded-lg bg-muted" />
+              </div>
+              <div className="mt-4 h-9 w-16 rounded bg-muted" />
+              <div className="mt-3 space-y-2">
+                <div className="h-3 w-24 rounded bg-muted" />
+                <div className="h-3 w-20 rounded bg-muted" />
+              </div>
+            </div>
           ))}
         </div>
       ) : null}
@@ -70,45 +456,23 @@ export default function Dashboard() {
       ) : null}
 
       {statsQuery.data ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {CARDS.map(({ key, title, href, icon: Icon, detail }) => {
-            const total =
-              key === 'instructors'
-                ? statsQuery.data.stats.instructors.total
-                : key === 'classes'
-                  ? statsQuery.data.stats.classes.total
-                  : key === 'students'
-                    ? statsQuery.data.stats.students.total
-                    : statsQuery.data.stats.inquiries.total
-
-            return (
-              <Link
+        <>
+          <div className={CARD_GRID_CLASS}>
+            {CARDS.map(({ key, title, href, icon, iconClassName, total, metrics }) => (
+              <StatCard
                 key={key}
+                title={title}
                 href={href}
-                className={cn(
-                  'group rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-accent/40 hover:bg-secondary/30',
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">{title}</p>
-                    <p className="mt-2 text-3xl font-semibold text-foreground">{total}</p>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {detail(statsQuery.data.stats)}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-secondary p-2 text-secondary-foreground">
-                    <Icon className="h-5 w-5" aria-hidden />
-                  </div>
-                </div>
-                <p className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-accent group-hover:underline">
-                  View all
-                  <ArrowRight className="h-4 w-4" aria-hidden />
-                </p>
-              </Link>
-            )
-          })}
-        </div>
+                icon={icon}
+                iconClassName={iconClassName}
+                total={total(statsQuery.data.stats)}
+                metrics={metrics(statsQuery.data.stats)}
+              />
+            ))}
+          </div>
+
+          <DashboardUsageSummary stats={statsQuery.data.stats} />
+        </>
       ) : null}
     </div>
   )

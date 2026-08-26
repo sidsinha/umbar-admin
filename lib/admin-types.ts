@@ -22,8 +22,30 @@ export type AdminInstructor = {
   activeClassSubjects: string[]
   signupGeo: Record<string, unknown> | null
   signupSource: Record<string, unknown> | null
+  dashboardPageViews30d: number
+  lastDashboardVisitAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+export type AdminInstructorDashboardUsage = {
+  pageViews: number
+  lastActiveDate: string | null
+  screens: { screenName: string; pageTitle: string; count: number }[]
+  navClicks: { navItem: string; count: number }[]
+  actions: { action: string; label: string; count: number }[]
+  dailyPageViews: { date: string; count: number }[]
+}
+
+export type AdminInstructorDashboardUsageResponse = {
+  success: true
+  instructor: {
+    id: string
+    name: string
+    email: string | null
+  }
+  days: number
+  usage: AdminInstructorDashboardUsage
 }
 
 export type AdminInstructorDeleteImpact = {
@@ -153,6 +175,22 @@ export type AdminStats = {
   classes: { total: number; active: number; completed: number; archived: number }
   students: { total: number; active: number; inactive: number }
   inquiries: { total: number; last7Days: number }
+  dashboardUsage: {
+    activeInstructors7d: number
+    pageViews7d: number
+    navClicks7d: number
+    actions7d: number
+    screens: { screenName: string; pageTitle: string; count: number }[]
+    navItems: { navItem: string; count: number }[]
+    actionItems: { action: string; label: string; count: number }[]
+    instructors: {
+      instructorId: string
+      name: string
+      pageViews: number
+      lastActiveDate: string | null
+    }[]
+    instructorIdentitiesAvailable: boolean
+  }
 }
 
 export type AdminStatsResponse = {
