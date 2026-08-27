@@ -160,6 +160,29 @@ export type AdminStudent = {
   updatedAt: string
 }
 
+export type AdminStudentDeleteImpact = {
+  enrollmentsTotal: number
+  enrollmentsActive: number
+  trialSessions: number
+  joinRequests: number
+  cancellationRequests: number
+  classInterests: number
+  conversations: number
+  attendanceRecords: number
+  ratingsGiven: number
+  pendingInvitations: number
+}
+
+export type AdminStudentDeleteImpactResponse = {
+  success: true
+  student: {
+    id: string
+    name: string
+    email: string | null
+  }
+  impact: AdminStudentDeleteImpact
+}
+
 export type AdminInquiry = {
   id: string
   leadName: string | null

@@ -9,6 +9,7 @@ import type {
   AdminListResult,
   AdminStatsResponse,
   AdminStudent,
+  AdminStudentDeleteImpactResponse,
 } from '@/lib/admin-types'
 import { fetchAdminApiDelete, fetchAdminApiGet, fetchAdminApiPost } from '@/lib/fetch-admin-api'
 import { ADMIN_OPS_ROOT } from '@/lib/config'
@@ -122,6 +123,24 @@ export async function fetchAdminStudents(
 ): Promise<AdminListResult<AdminStudent>> {
   const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/students${buildQuery(params)}`)
   return payload as unknown as AdminListResult<AdminStudent>
+}
+
+export async function fetchAdminStudentDeleteImpact(
+  studentId: string,
+): Promise<AdminStudentDeleteImpactResponse> {
+  const payload = await fetchAdminApiGet(
+    `${ADMIN_OPS_ROOT}/students/${encodeURIComponent(studentId)}/delete-impact`,
+  )
+  return payload as unknown as AdminStudentDeleteImpactResponse
+}
+
+export async function deleteAdminStudent(
+  studentId: string,
+): Promise<{ success: true; deletedId: string }> {
+  const payload = await fetchAdminApiDelete(
+    `${ADMIN_OPS_ROOT}/students/${encodeURIComponent(studentId)}`,
+  )
+  return payload as unknown as { success: true; deletedId: string }
 }
 
 export async function fetchAdminInquiries(
