@@ -8,6 +8,7 @@ export type MarketplaceCategoryV1 = {
 export type MarketplaceCategoryV2Child = {
   id: string
   name: string
+  providerSegment?: 'individual' | 'academy'
 }
 
 export type MarketplaceCategoryV2Parent = {
@@ -75,7 +76,12 @@ export function isV2CategoriesResponse(
 }
 
 export async function fetchCategories(): Promise<CategoriesResponse> {
-  const response = await fetch(buildUrl('/api/categories'))
+  const response = await fetch(
+    buildUrl('/api/categories', {
+      taxonomy: 'v2',
+      populatedOnly: 'false',
+    }),
+  )
   return parseJson<CategoriesResponse>(response)
 }
 

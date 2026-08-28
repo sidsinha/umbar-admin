@@ -129,6 +129,7 @@ export type AdminClassDetailResponse = {
   class: AdminClassDetail
   instructorName: string | null
   instructorEmail: string | null
+  instructorType: 'individual' | 'academy'
 }
 
 export type AdminClassUpdateBody = {

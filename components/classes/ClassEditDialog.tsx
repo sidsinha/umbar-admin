@@ -16,13 +16,34 @@ import { CLASS_LOGO_TOO_LARGE_MESSAGE, isClassLogoTooLarge } from '@/lib/class-l
 import { fetchAdminClass, updateAdminClass } from '@/lib/admin-ops-api-client'
 import type { AdminClassDetail, AdminClassUpdateBody, ClassDefaultFee, ClassLocation } from '@/lib/admin-types'
 import {
+  childMatchesSegment,
+  filterParentCategoriesForBrowse,
+  type ProviderSegment,
+} from '@/lib/filter-categories-by-segment'
+import {
   fetchCategories,
   fetchSupportedCountries,
   isV2CategoriesResponse,
+  type MarketplaceCategoryV2Child,
   type MarketplaceCategoryV2Parent,
 } from '@/lib/marketplace-api-client'
 
 const CLASS_NAME_MAX_LENGTH = 64
+
+function instructorTypeLabel(type: ProviderSegment): string {
+  return type === 'academy' ? 'Academy' : 'Individual'
+}
+
+function findSubcategoryInTree(
+  parents: MarketplaceCategoryV2Parent[],
+  subcategoryId: string,
+): MarketplaceCategoryV2Child | null {
+  for (const parent of parents) {
+    const match = parent.children?.find((child) => child.id === subcategoryId)
+    if (match) return match
+  }
+  return null
+}
 
 type ClassTypeOption = 'in-person' | 'remote' | 'both'
 type ClassFormStatus = 'active' | 'disabled'
@@ -118,7 +139,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   })
 
   const categoriesQuery = useQuery({
-    queryKey: ['marketplace-categories'],
+    queryKey: ['marketplace-categories', 'v2', 'all'],
     queryFn: fetchCategories,
     enabled: open,
   })
@@ -338,8 +359,42 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     ? [detailQuery.data.instructorName, detailQuery.data.instructorEmail].filter(Boolean).join(' · ')
     : ''
 
-  const selectedParent = v2Categories.find((item) => item.id === categoryId)
-  const subcategoryOptions = selectedParent?.children ?? []
+  const instructorType: ProviderSegment =
+    detailQuery.data?.instructorType === 'academy' ? 'academy' : 'individual'
+
+  const filteredParents = useMemo(
+    () => (isV2 ? filterParentCategoriesForBrowse(v2Categories, instructorType) : []),
+    [isV2, v2Categories, instructorType],
+  )
+
+  const parentOptions = useMemo(() => {
+    if (!isV2) return [] as MarketplaceCategoryV2Parent[]
+    if (!categoryId || filteredParents.some((parent) => parent.id === categoryId)) {
+      return filteredParents
+    }
+    const staleParent = v2Categories.find((parent) => parent.id === categoryId)
+    return staleParent ? [...filteredParents, staleParent] : filteredParents
+  }, [isV2, filteredParents, categoryId, v2Categories])
+
+  const selectedParent =
+    filteredParents.find((item) => item.id === categoryId) ??
+    v2Categories.find((item) => item.id === categoryId) ??
+    null
+
+  const subcategoryOptions = useMemo(() => {
+    if (!isV2 || !selectedParent) return [] as MarketplaceCategoryV2Child[]
+
+    const filtered = (selectedParent.children ?? []).filter((child) =>
+      childMatchesSegment(child, instructorType),
+    )
+
+    if (!subcategoryId || filtered.some((child) => child.id === subcategoryId)) {
+      return filtered
+    }
+
+    const staleChild = findSubcategoryInTree(v2Categories, subcategoryId)
+    return staleChild ? [...filtered, staleChild] : filtered
+  }, [isV2, selectedParent, instructorType, subcategoryId, v2Categories])
 
   const loading = detailQuery.isLoading || categoriesQuery.isLoading
 
@@ -364,7 +419,15 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
       ) : (
         <div className="space-y-8">
           {instructorLabel ? (
-            <p className="text-sm text-muted-foreground">Instructor: {instructorLabel}</p>
+            <p className="text-sm text-muted-foreground">
+              Instructor: {instructorLabel}
+              {isV2 ? (
+                <>
+                  {' '}
+                  · <span className="font-medium text-foreground">{instructorTypeLabel(instructorType)}</span>
+                </>
+              ) : null}
+            </p>
           ) : null}
 
           {formError ? (
@@ -478,7 +541,11 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
             {categoriesQuery.isError ? (
               <p className="text-sm text-destructive">Failed to load categories.</p>
             ) : isV2 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Showing categories for {instructorTypeLabel(instructorType)} instructors.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="category-parent">Category</Label>
                   <select
@@ -491,7 +558,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
                     }}
                   >
                     <option value="">Select category</option>
-                    {v2Categories.map((item) => (
+                    {parentOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
                       </option>
@@ -514,6 +581,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
                       </option>
                     ))}
                   </select>
+                </div>
                 </div>
               </div>
             ) : (
