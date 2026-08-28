@@ -17,6 +17,7 @@ export type AdminInstructor = {
   email: string | null
   phoneNumber: string | null
   gender: string | null
+  instructorType: 'individual' | 'academy'
   isActive: boolean
   activeClasses: number
   activeClassSubjects: string[]

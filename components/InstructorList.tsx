@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import DataTable from '@/components/DataTable'
 import InstructorDashboardUsagePanel from '@/components/InstructorDashboardUsagePanel'
 import InstructorFiltersBar, { type SignupSourceFilter } from '@/components/InstructorFiltersBar'
+import InstructorTypeToggle from '@/components/InstructorTypeToggle'
 import PaginationControls from '@/components/PaginationControls'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,6 +15,7 @@ import {
   fetchAdminInstructorDeleteImpact,
   fetchAdminInstructorSignupCities,
   fetchAdminInstructors,
+  setAdminInstructorType,
 } from '@/lib/admin-ops-api-client'
 import type { AdminInstructor, AdminInstructorDeleteImpactResponse } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
@@ -61,6 +63,7 @@ export default function InstructorList() {
   const [pendingDelete, setPendingDelete] = useState<AdminInstructor | null>(null)
   const [usageInstructor, setUsageInstructor] = useState<AdminInstructor | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [togglingInstructorId, setTogglingInstructorId] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
     useCursorPagination()
 
@@ -116,6 +119,31 @@ export default function InstructorList() {
     },
   })
 
+  const instructorTypeMutation = useMutation({
+    mutationFn: ({
+      instructorId,
+      instructorType,
+    }: {
+      instructorId: string
+      instructorType: 'individual' | 'academy'
+    }) => setAdminInstructorType(instructorId, instructorType),
+    onMutate: ({ instructorId }) => {
+      setTogglingInstructorId(instructorId)
+      setActionError(null)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin-instructors'] })
+    },
+    onError: (error) => {
+      setActionError(
+        error instanceof Error ? error.message : 'Failed to update instructor type.',
+      )
+    },
+    onSettled: () => {
+      setTogglingInstructorId(null)
+    },
+  })
+
   function handleApply() {
     setAppliedEmail(emailFilter.trim())
     setAppliedSignupSource(signupSourceFilter)
@@ -126,6 +154,15 @@ export default function InstructorList() {
   function openDeleteDialog(item: AdminInstructor) {
     setActionError(null)
     setPendingDelete(item)
+  }
+
+  function handleInstructorTypeChange(
+    item: AdminInstructor,
+    instructorType: 'individual' | 'academy',
+  ) {
+    const current = item.instructorType === 'academy' ? 'academy' : 'individual'
+    if (instructorType === current) return
+    instructorTypeMutation.mutate({ instructorId: item.id, instructorType })
   }
 
   function closeDeleteDialog() {
@@ -176,6 +213,7 @@ export default function InstructorList() {
       <DataTable
         columns={[
           'Name',
+          'Type',
           'Phone',
           'Source',
           'Signup location',
@@ -189,9 +227,20 @@ export default function InstructorList() {
           'Actions',
         ]}
       >
-        {items.map((item) => (
+        {items.map((item) => {
+          const isTogglingType = togglingInstructorId === item.id
+          const instructorType = item.instructorType === 'academy' ? 'academy' : 'individual'
+
+          return (
           <tr key={item.id}>
             <td className="px-4 py-3">{displayPersonName(item)}</td>
+            <td className="px-4 py-3">
+              <InstructorTypeToggle
+                value={instructorType}
+                disabled={isTogglingType}
+                onChange={(next) => handleInstructorTypeChange(item, next)}
+              />
+            </td>
             <td className="px-4 py-3">{item.phoneNumber ?? '—'}</td>
             <td className="px-4 py-3">{formatSignupSource(item.signupSource)}</td>
             <td className="px-4 py-3">{formatSignupGeo(item.signupGeo)}</td>
@@ -232,7 +281,8 @@ export default function InstructorList() {
               </div>
             </td>
           </tr>
-        ))}
+          )
+        })}
       </DataTable>
 
       <PaginationControls

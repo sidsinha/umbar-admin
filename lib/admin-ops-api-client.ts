@@ -82,6 +82,20 @@ export async function deleteAdminInstructor(
   return payload as unknown as { success: true; deletedId: string }
 }
 
+export async function setAdminInstructorType(
+  instructorId: string,
+  instructorType: 'individual' | 'academy',
+): Promise<{ success: true; instructor: { id: string; instructorType: 'individual' | 'academy' } }> {
+  const payload = await fetchAdminApiPost(
+    `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}/instructor-type`,
+    { instructorType },
+  )
+  return payload as unknown as {
+    success: true
+    instructor: { id: string; instructorType: 'individual' | 'academy' }
+  }
+}
+
 export async function fetchAdminClasses(
   params: ListQueryParams = {},
 ): Promise<AdminListResult<AdminClass>> {
