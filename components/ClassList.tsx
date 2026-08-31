@@ -16,7 +16,7 @@ import {
 } from '@/lib/admin-ops-api-client'
 import type { AdminClass } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
-import { cn, formatClassCreatedFrom, formatClassLocation, formatDate } from '@/utils'
+import { cn, formatClassCreatedFrom, formatDate } from '@/utils'
 
 function canToggleMarketplace(status: string): boolean {
   return status === 'active' || status === 'disabled'
@@ -31,8 +31,10 @@ function formatClassStatus(status: string): string {
 
 export default function ClassList() {
   const queryClient = useQueryClient()
-  const [emailFilter, setEmailFilter] = useState('')
-  const [appliedEmail, setAppliedEmail] = useState('')
+  const [classNameFilter, setClassNameFilter] = useState('')
+  const [appliedClassName, setAppliedClassName] = useState('')
+  const [phoneFilter, setPhoneFilter] = useState('')
+  const [appliedPhone, setAppliedPhone] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [togglingClassId, setTogglingClassId] = useState<string | null>(null)
   const [editingClassId, setEditingClassId] = useState<string | null>(null)
@@ -41,13 +43,14 @@ export default function ClassList() {
 
   useEffect(() => {
     resetPaging()
-  }, [appliedEmail, limit, resetPaging])
+  }, [appliedClassName, appliedPhone, limit, resetPaging])
 
   const listQuery = useQuery({
-    queryKey: ['admin-classes', appliedEmail, limit, currentCursor],
+    queryKey: ['admin-classes', appliedClassName, appliedPhone, limit, currentCursor],
     queryFn: () =>
       fetchAdminClasses({
-        instructorEmail: appliedEmail || undefined,
+        className: appliedClassName || undefined,
+        instructorPhone: appliedPhone || undefined,
         limit,
         cursor: currentCursor,
       }),
@@ -77,7 +80,8 @@ export default function ClassList() {
   })
 
   function handleApply() {
-    setAppliedEmail(emailFilter.trim())
+    setAppliedClassName(classNameFilter.trim())
+    setAppliedPhone(phoneFilter.trim())
     resetPaging()
   }
 
@@ -98,9 +102,14 @@ export default function ClassList() {
       </div>
 
       <ListFiltersBar
-        filterLabel="Filter by instructor email"
-        filterValue={emailFilter}
-        onFilterChange={setEmailFilter}
+        filterLabel="Filter by class name"
+        filterValue={classNameFilter}
+        onFilterChange={setClassNameFilter}
+        filterPlaceholder="Class name…"
+        secondaryFilterLabel="Filter by instructor phone"
+        secondaryFilterValue={phoneFilter}
+        onSecondaryFilterChange={setPhoneFilter}
+        secondaryFilterPlaceholder="Instructor phone…"
         limit={limit}
         onLimitChange={setLimit}
         onApply={handleApply}
@@ -124,7 +133,6 @@ export default function ClassList() {
           'Name',
           'Instructor',
           'Category',
-          'Location',
           'Enrolled',
           'Views',
           'Marketplace',
@@ -142,9 +150,8 @@ export default function ClassList() {
           return (
             <tr key={item.id}>
               <td className="px-4 py-3">{item.name}</td>
-              <td className="px-4 py-3">{item.instructorName ?? item.instructorEmail ?? '—'}</td>
+              <td className="px-4 py-3">{item.instructorName ?? '—'}</td>
               <td className="px-4 py-3">{item.category ?? '—'}</td>
-              <td className="px-4 py-3">{formatClassLocation(item.location)}</td>
               <td className="px-4 py-3">{item.currentEnrollments}</td>
               <td className="px-4 py-3" title="GA4 page views (lifetime)">
                 {(item.gaPageViewCount ?? 0).toLocaleString()}

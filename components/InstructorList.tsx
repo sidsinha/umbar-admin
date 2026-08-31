@@ -6,7 +6,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import DataTable from '@/components/DataTable'
 import InstructorDashboardUsagePanel from '@/components/InstructorDashboardUsagePanel'
-import InstructorFiltersBar, { type SignupSourceFilter } from '@/components/InstructorFiltersBar'
+import InstructorFiltersBar, {
+  type InstructorTypeFilter,
+  type SignupSourceFilter,
+} from '@/components/InstructorFiltersBar'
 import InstructorTypeToggle from '@/components/InstructorTypeToggle'
 import PaginationControls from '@/components/PaginationControls'
 import { Button } from '@/components/ui/button'
@@ -54,8 +57,12 @@ function ImpactRow({
 
 export default function InstructorList() {
   const queryClient = useQueryClient()
-  const [emailFilter, setEmailFilter] = useState('')
-  const [appliedEmail, setAppliedEmail] = useState('')
+  const [nameFilter, setNameFilter] = useState('')
+  const [appliedName, setAppliedName] = useState('')
+  const [phoneFilter, setPhoneFilter] = useState('')
+  const [appliedPhone, setAppliedPhone] = useState('')
+  const [instructorTypeFilter, setInstructorTypeFilter] = useState<InstructorTypeFilter>('')
+  const [appliedInstructorType, setAppliedInstructorType] = useState<InstructorTypeFilter>('')
   const [signupSourceFilter, setSignupSourceFilter] = useState<SignupSourceFilter>('')
   const [appliedSignupSource, setAppliedSignupSource] = useState<SignupSourceFilter>('')
   const [signupLocationFilter, setSignupLocationFilter] = useState('')
@@ -65,16 +72,18 @@ export default function InstructorList() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [togglingInstructorId, setTogglingInstructorId] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
-    useCursorPagination()
+    useCursorPagination(200)
 
   useEffect(() => {
     resetPaging()
-  }, [appliedEmail, appliedSignupSource, appliedSignupLocation, limit, resetPaging])
+  }, [appliedName, appliedPhone, appliedInstructorType, appliedSignupSource, appliedSignupLocation, limit, resetPaging])
 
   const listQuery = useQuery({
     queryKey: [
       'admin-instructors',
-      appliedEmail,
+      appliedName,
+      appliedPhone,
+      appliedInstructorType,
       appliedSignupSource,
       appliedSignupLocation,
       limit,
@@ -82,7 +91,9 @@ export default function InstructorList() {
     ],
     queryFn: () =>
       fetchAdminInstructors({
-        email: appliedEmail || undefined,
+        name: appliedName || undefined,
+        phone: appliedPhone || undefined,
+        instructorType: appliedInstructorType || undefined,
         signupSource: appliedSignupSource || undefined,
         signupLocation: appliedSignupLocation || undefined,
         limit,
@@ -145,7 +156,9 @@ export default function InstructorList() {
   })
 
   function handleApply() {
-    setAppliedEmail(emailFilter.trim())
+    setAppliedName(nameFilter.trim())
+    setAppliedPhone(phoneFilter.trim())
+    setAppliedInstructorType(instructorTypeFilter)
     setAppliedSignupSource(signupSourceFilter)
     setAppliedSignupLocation(signupLocationFilter.trim())
     resetPaging()
@@ -187,8 +200,12 @@ export default function InstructorList() {
       </div>
 
       <InstructorFiltersBar
-        email={emailFilter}
-        onEmailChange={setEmailFilter}
+        name={nameFilter}
+        onNameChange={setNameFilter}
+        phone={phoneFilter}
+        onPhoneChange={setPhoneFilter}
+        instructorType={instructorTypeFilter}
+        onInstructorTypeChange={setInstructorTypeFilter}
         signupSource={signupSourceFilter}
         onSignupSourceChange={setSignupSourceFilter}
         signupLocation={signupLocationFilter}

@@ -1,13 +1,7 @@
 'use client'
 
+import { instructorTypeLabel, INSTRUCTOR_TYPE_OPTIONS, type InstructorType } from '@/lib/instructor-type'
 import { cn } from '@/utils'
-
-export type InstructorType = 'individual' | 'academy'
-
-const OPTIONS: { value: InstructorType; label: string }[] = [
-  { value: 'individual', label: 'Individual' },
-  { value: 'academy', label: 'Academy' },
-]
 
 type InstructorTypeToggleProps = {
   value: InstructorType
@@ -31,7 +25,7 @@ export default function InstructorTypeToggle({
         disabled && 'pointer-events-none opacity-60',
       )}
     >
-      {OPTIONS.map((option) => {
+      {INSTRUCTOR_TYPE_OPTIONS.map((option) => {
         const selected = resolvedValue === option.value
         return (
           <button
@@ -39,6 +33,8 @@ export default function InstructorTypeToggle({
             type="button"
             role="radio"
             aria-checked={selected}
+            aria-label={option.label}
+            title={option.description}
             disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(
@@ -48,10 +44,12 @@ export default function InstructorTypeToggle({
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            {option.label}
+            {instructorTypeLabel(option.value)}
           </button>
         )
       })}
     </div>
   )
 }
+
+export type { InstructorType }

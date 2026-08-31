@@ -20,6 +20,7 @@ import {
   filterParentCategoriesForBrowse,
   type ProviderSegment,
 } from '@/lib/filter-categories-by-segment'
+import { instructorTypeLabel } from '@/lib/instructor-type'
 import {
   fetchCategories,
   fetchSupportedCountries,
@@ -29,10 +30,6 @@ import {
 } from '@/lib/marketplace-api-client'
 
 const CLASS_NAME_MAX_LENGTH = 64
-
-function instructorTypeLabel(type: ProviderSegment): string {
-  return type === 'academy' ? 'Academy' : 'Individual'
-}
 
 function findSubcategoryInTree(
   parents: MarketplaceCategoryV2Parent[],
@@ -543,7 +540,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
             ) : isV2 ? (
               <div className="space-y-3">
                 <p className="text-xs text-muted-foreground">
-                  Showing categories for {instructorTypeLabel(instructorType)} instructors.
+                  Showing categories for {instructorTypeLabel(instructorType)}.
                 </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">

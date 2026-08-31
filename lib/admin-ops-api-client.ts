@@ -18,7 +18,12 @@ export type ListQueryParams = {
   limit?: number
   cursor?: string | null
   email?: string
+  name?: string
+  phone?: string
+  instructorType?: string
   instructorEmail?: string
+  instructorPhone?: string
+  className?: string
   classId?: string
   signupSource?: string
   signupLocation?: string
@@ -29,7 +34,12 @@ function buildQuery(params: ListQueryParams): string {
   if (params.limit) search.set('limit', String(params.limit))
   if (params.cursor) search.set('cursor', params.cursor)
   if (params.email) search.set('email', params.email)
+  if (params.name) search.set('name', params.name)
+  if (params.phone) search.set('phone', params.phone)
+  if (params.instructorType) search.set('instructorType', params.instructorType)
   if (params.instructorEmail) search.set('instructorEmail', params.instructorEmail)
+  if (params.instructorPhone) search.set('instructorPhone', params.instructorPhone)
+  if (params.className) search.set('className', params.className)
   if (params.classId) search.set('classId', params.classId)
   if (params.signupSource) search.set('signupSource', params.signupSource)
   if (params.signupLocation) search.set('signupLocation', params.signupLocation)

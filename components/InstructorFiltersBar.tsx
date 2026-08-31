@@ -3,12 +3,18 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { INSTRUCTOR_TYPE_OPTIONS, type InstructorType } from '@/lib/instructor-type'
 
 export type SignupSourceFilter = '' | 'app' | 'organic' | 'ppc'
+export type InstructorTypeFilter = '' | InstructorType
 
 type InstructorFiltersBarProps = {
-  email: string
-  onEmailChange: (value: string) => void
+  name: string
+  onNameChange: (value: string) => void
+  phone: string
+  onPhoneChange: (value: string) => void
+  instructorType: InstructorTypeFilter
+  onInstructorTypeChange: (value: InstructorTypeFilter) => void
   signupSource: SignupSourceFilter
   onSignupSourceChange: (value: SignupSourceFilter) => void
   signupLocation: string
@@ -22,8 +28,12 @@ type InstructorFiltersBarProps = {
 }
 
 export default function InstructorFiltersBar({
-  email,
-  onEmailChange,
+  name,
+  onNameChange,
+  phone,
+  onPhoneChange,
+  instructorType,
+  onInstructorTypeChange,
   signupSource,
   onSignupSourceChange,
   signupLocation,
@@ -37,16 +47,42 @@ export default function InstructorFiltersBar({
 }: InstructorFiltersBarProps) {
   return (
     <div className="mb-6 flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <div>
-          <Label htmlFor="instructor-email-filter">Filter by email</Label>
+          <Label htmlFor="instructor-name-filter">Filter by name</Label>
           <Input
-            id="instructor-email-filter"
-            value={email}
-            onChange={(event) => onEmailChange(event.target.value)}
+            id="instructor-name-filter"
+            value={name}
+            onChange={(event) => onNameChange(event.target.value)}
             className="mt-2"
-            placeholder="Search email…"
+            placeholder="First or last name…"
           />
+        </div>
+        <div>
+          <Label htmlFor="instructor-phone-filter">Filter by phone</Label>
+          <Input
+            id="instructor-phone-filter"
+            value={phone}
+            onChange={(event) => onPhoneChange(event.target.value)}
+            className="mt-2"
+            placeholder="Phone number…"
+          />
+        </div>
+        <div>
+          <Label htmlFor="instructor-type-filter">Type</Label>
+          <select
+            id="instructor-type-filter"
+            value={instructorType}
+            onChange={(event) => onInstructorTypeChange(event.target.value as InstructorTypeFilter)}
+            className="mt-2 flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="">All types</option>
+            {INSTRUCTOR_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <Label htmlFor="instructor-source-filter">Source</Label>
@@ -85,9 +121,9 @@ export default function InstructorFiltersBar({
             id="instructor-list-limit"
             type="number"
             min={1}
-            max={100}
+            max={200}
             value={limit}
-            onChange={(event) => onLimitChange(Number(event.target.value) || 25)}
+            onChange={(event) => onLimitChange(Number(event.target.value) || 200)}
             className="mt-2"
           />
         </div>
