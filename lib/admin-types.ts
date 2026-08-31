@@ -119,6 +119,8 @@ export type AdminClassDetail = {
   subcategoryId: string | null
   tags: string[]
   status: string
+  /** This specific class's individual/academy segment (distinct from the instructor's account type below). */
+  instructorType: 'individual' | 'academy' | null
   defaultFee: ClassDefaultFee | null
   createdAt: string | null
   updatedAt: string | null
@@ -129,7 +131,8 @@ export type AdminClassDetailResponse = {
   class: AdminClassDetail
   instructorName: string | null
   instructorEmail: string | null
-  instructorType: 'individual' | 'academy'
+  /** The instructor's account type — may be "both", in which case each class picks its own type. */
+  instructorType: 'individual' | 'academy' | 'both'
 }
 
 export type AdminClassUpdateBody = {
@@ -146,6 +149,7 @@ export type AdminClassUpdateBody = {
   subcategoryId?: string
   tags: string[]
   status: string
+  instructorType?: 'individual' | 'academy'
   defaultFee?: ClassDefaultFee | null
 }
 

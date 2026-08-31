@@ -23,6 +23,20 @@ export type CategoriesResponse = {
   meta?: { taxonomy?: string }
 }
 
+export type ClassTagGroup = {
+  /** Group key/tag-prefix, e.g. "ageGroups", "schoolGrades", "boards". */
+  id: string
+  label: string
+  /** null => shown for every category; else only shown when the class's categoryId is in this list. */
+  visibleForCategoryIds: string[] | null
+  options: string[]
+}
+
+type ClassTagsResponse = {
+  success: true
+  tagGroups: ClassTagGroup[]
+}
+
 export type SupportedCountry = {
   id: string
   name: string
@@ -73,6 +87,41 @@ export function isV2CategoriesResponse(
   response: CategoriesResponse,
 ): response is CategoriesResponse & { categories: MarketplaceCategoryV2Parent[] } {
   return response.meta?.taxonomy === 'v2'
+}
+
+function parseTagGroups(list: unknown): ClassTagGroup[] {
+  if (!Array.isArray(list)) return []
+  return list
+    .map((item) => {
+      const row = item as {
+        id?: string
+        label?: string
+        visibleForCategoryIds?: unknown
+        options?: unknown[]
+      }
+      const id = String(row?.id || '').trim()
+      const label = String(row?.label || '').trim()
+      const options = Array.isArray(row?.options)
+        ? row.options.map((value) => String(value ?? '').trim()).filter(Boolean)
+        : []
+      const visibleForCategoryIds = Array.isArray(row?.visibleForCategoryIds)
+        ? row.visibleForCategoryIds.map((value) => String(value ?? '').trim()).filter(Boolean)
+        : null
+      return {
+        id,
+        label,
+        visibleForCategoryIds:
+          visibleForCategoryIds && visibleForCategoryIds.length > 0 ? visibleForCategoryIds : null,
+        options,
+      }
+    })
+    .filter((item) => item.id && item.label)
+}
+
+export async function fetchClassTags(): Promise<ClassTagGroup[]> {
+  const response = await fetch(buildUrl('/api/marketplace/class-tags'))
+  const payload = await parseJson<ClassTagsResponse>(response)
+  return parseTagGroups(payload.tagGroups)
 }
 
 export async function fetchCategories(): Promise<CategoriesResponse> {

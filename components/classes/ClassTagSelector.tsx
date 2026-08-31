@@ -1,32 +1,45 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
-import {
-  getTagCategory,
-  getTagDisplayName,
-  TAG_CATEGORIES,
-  TAG_CATEGORY_LABELS,
-  TAG_COLORS,
-  type TagCategoryKey,
-} from '@/components/classes/class-tags'
+import { getTagCategory, getTagDisplayName, TAG_COLORS } from '@/components/classes/class-tags'
+import type { ClassTagGroup } from '@/lib/marketplace-api-client'
 import { cn } from '@/utils'
 
 type ClassTagSelectorProps = {
   selectedTags: string[]
   onTagsChange: (tags: string[]) => void
+  tagGroups: ClassTagGroup[]
+  categoryId?: string
   maxTags?: number
 }
 
 export default function ClassTagSelector({
   selectedTags,
   onTagsChange,
+  tagGroups,
+  categoryId,
   maxTags = 10,
 }: ClassTagSelectorProps) {
-  const [activeCategory, setActiveCategory] = useState<TagCategoryKey>('ageGroups')
+  const visibleGroups = useMemo(
+    () =>
+      categoryId === undefined
+        ? tagGroups
+        : tagGroups.filter(
+            (group) => !group.visibleForCategoryIds || group.visibleForCategoryIds.includes(categoryId),
+          ),
+    [tagGroups, categoryId],
+  )
 
-  function handleTagToggle(tag: string, category: TagCategoryKey) {
-    const tagKey = `${category}:${tag}`
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const resolvedActiveCategory =
+    activeCategory && visibleGroups.some((g) => g.id === activeCategory)
+      ? activeCategory
+      : visibleGroups[0]?.id || null
+  const activeGroup = visibleGroups.find((g) => g.id === resolvedActiveCategory) || null
+
+  function handleTagToggle(tag: string, groupId: string) {
+    const tagKey = `${groupId}:${tag}`
     if (selectedTags.includes(tagKey)) {
       onTagsChange(selectedTags.filter((item) => item !== tagKey))
       return
@@ -73,46 +86,50 @@ export default function ClassTagSelector({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-2 border-b border-border pb-2">
-        {(Object.keys(TAG_CATEGORIES) as TagCategoryKey[]).map((category) => (
-          <button
-            key={category}
-            type="button"
-            className={cn(
-              'rounded-md px-3 py-1.5 text-xs font-medium',
-              activeCategory === category
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80',
-            )}
-            onClick={() => setActiveCategory(category)}
-          >
-            {TAG_CATEGORY_LABELS[category]}
-          </button>
-        ))}
-      </div>
+      {visibleGroups.length > 0 ? (
+        <>
+          <div className="flex flex-wrap gap-2 border-b border-border pb-2">
+            {visibleGroups.map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium',
+                  resolvedActiveCategory === group.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                )}
+                onClick={() => setActiveCategory(group.id)}
+              >
+                {group.label}
+              </button>
+            ))}
+          </div>
 
-      <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
-        {TAG_CATEGORIES[activeCategory].map((tag) => {
-          const tagKey = `${activeCategory}:${tag}`
-          const isSelected = selectedTags.includes(tagKey)
-          return (
-            <button
-              key={tagKey}
-              type="button"
-              disabled={!isSelected && selectedTags.length >= maxTags}
-              className={cn(
-                'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                isSelected
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-border bg-background text-muted-foreground hover:border-primary/40',
-              )}
-              onClick={() => handleTagToggle(tag, activeCategory)}
-            >
-              {tag}
-            </button>
-          )
-        })}
-      </div>
+          <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
+            {(activeGroup?.options || []).map((tag) => {
+              const tagKey = `${activeGroup!.id}:${tag}`
+              const isSelected = selectedTags.includes(tagKey)
+              return (
+                <button
+                  key={tagKey}
+                  type="button"
+                  disabled={!isSelected && selectedTags.length >= maxTags}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                    isSelected
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-background text-muted-foreground hover:border-primary/40',
+                  )}
+                  onClick={() => handleTagToggle(tag, activeGroup!.id)}
+                >
+                  {tag}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }

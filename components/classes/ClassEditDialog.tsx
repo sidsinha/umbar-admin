@@ -8,6 +8,7 @@ import ClassLocationField from '@/components/classes/ClassLocationField'
 import ClassLogoField from '@/components/classes/ClassLogoField'
 import ClassTagSelector from '@/components/classes/ClassTagSelector'
 import FormDialog from '@/components/FormDialog'
+import InstructorTypeToggle from '@/components/InstructorTypeToggle'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -15,14 +16,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { CLASS_LOGO_TOO_LARGE_MESSAGE, isClassLogoTooLarge } from '@/lib/class-logo'
 import { fetchAdminClass, updateAdminClass } from '@/lib/admin-ops-api-client'
 import type { AdminClassDetail, AdminClassUpdateBody, ClassDefaultFee, ClassLocation } from '@/lib/admin-types'
-import {
-  childMatchesSegment,
-  filterParentCategoriesForBrowse,
-  type ProviderSegment,
-} from '@/lib/filter-categories-by-segment'
-import { instructorTypeLabel } from '@/lib/instructor-type'
+import { instructorTypeLabel, type InstructorType } from '@/lib/instructor-type'
 import {
   fetchCategories,
+  fetchClassTags,
   fetchSupportedCountries,
   isV2CategoriesResponse,
   type MarketplaceCategoryV2Child,
@@ -30,17 +27,6 @@ import {
 } from '@/lib/marketplace-api-client'
 
 const CLASS_NAME_MAX_LENGTH = 64
-
-function findSubcategoryInTree(
-  parents: MarketplaceCategoryV2Parent[],
-  subcategoryId: string,
-): MarketplaceCategoryV2Child | null {
-  for (const parent of parents) {
-    const match = parent.children?.find((child) => child.id === subcategoryId)
-    if (match) return match
-  }
-  return null
-}
 
 type ClassTypeOption = 'in-person' | 'remote' | 'both'
 type ClassFormStatus = 'active' | 'disabled'
@@ -73,6 +59,8 @@ function detailToFormState(detail: AdminClassDetail) {
     category: typeof detail.category === 'string' ? detail.category.trim() : '',
     categoryId: detail.categoryId || '',
     subcategoryId: detail.subcategoryId || '',
+    instructorType:
+      detail.instructorType === 'academy' ? ('academy' as InstructorType) : ('individual' as InstructorType),
     tags: Array.isArray(detail.tags)
       ? detail.tags.filter((tag) => typeof tag === 'string' && !tag.startsWith('subjects:'))
       : [],
@@ -115,6 +103,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   const [category, setCategory] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [subcategoryId, setSubcategoryId] = useState('')
+  const [classInstructorType, setClassInstructorType] = useState<InstructorType>('individual')
   const [tags, setTags] = useState<string[]>([])
   const [locationText, setLocationText] = useState('')
   const [city, setCity] = useState('')
@@ -144,6 +133,12 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   const countriesQuery = useQuery({
     queryKey: ['marketplace-countries'],
     queryFn: () => fetchSupportedCountries({ marketplaceOnly: true }),
+    enabled: open,
+  })
+
+  const classTagsQuery = useQuery({
+    queryKey: ['marketplace-class-tags'],
+    queryFn: fetchClassTags,
     enabled: open,
   })
 
@@ -179,6 +174,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     setCategory(next.category)
     setCategoryId(next.categoryId)
     setSubcategoryId(next.subcategoryId)
+    setClassInstructorType(next.instructorType)
     setTags(next.tags)
     setLocationText(next.locationText)
     setCity(next.city)
@@ -329,6 +325,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
       hasTrialClass,
       tags,
       status: classStatus,
+      instructorType: resolvedInstructorType,
       defaultFee,
     }
 
@@ -356,42 +353,19 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     ? [detailQuery.data.instructorName, detailQuery.data.instructorEmail].filter(Boolean).join(' · ')
     : ''
 
-  const instructorType: ProviderSegment =
-    detailQuery.data?.instructorType === 'academy' ? 'academy' : 'individual'
+  const instructorAccountType = detailQuery.data?.instructorType ?? 'individual'
+  const needsClassInstructorTypeChoice = instructorAccountType === 'both'
+  const resolvedInstructorType: InstructorType = needsClassInstructorTypeChoice
+    ? classInstructorType
+    : instructorAccountType === 'academy'
+      ? 'academy'
+      : 'individual'
 
-  const filteredParents = useMemo(
-    () => (isV2 ? filterParentCategoriesForBrowse(v2Categories, instructorType) : []),
-    [isV2, v2Categories, instructorType],
-  )
+  const parentOptions: MarketplaceCategoryV2Parent[] = isV2 ? v2Categories : []
 
-  const parentOptions = useMemo(() => {
-    if (!isV2) return [] as MarketplaceCategoryV2Parent[]
-    if (!categoryId || filteredParents.some((parent) => parent.id === categoryId)) {
-      return filteredParents
-    }
-    const staleParent = v2Categories.find((parent) => parent.id === categoryId)
-    return staleParent ? [...filteredParents, staleParent] : filteredParents
-  }, [isV2, filteredParents, categoryId, v2Categories])
+  const selectedParent = v2Categories.find((item) => item.id === categoryId) ?? null
 
-  const selectedParent =
-    filteredParents.find((item) => item.id === categoryId) ??
-    v2Categories.find((item) => item.id === categoryId) ??
-    null
-
-  const subcategoryOptions = useMemo(() => {
-    if (!isV2 || !selectedParent) return [] as MarketplaceCategoryV2Child[]
-
-    const filtered = (selectedParent.children ?? []).filter((child) =>
-      childMatchesSegment(child, instructorType),
-    )
-
-    if (!subcategoryId || filtered.some((child) => child.id === subcategoryId)) {
-      return filtered
-    }
-
-    const staleChild = findSubcategoryInTree(v2Categories, subcategoryId)
-    return staleChild ? [...filtered, staleChild] : filtered
-  }, [isV2, selectedParent, instructorType, subcategoryId, v2Categories])
+  const subcategoryOptions: MarketplaceCategoryV2Child[] = isV2 ? selectedParent?.children ?? [] : []
 
   const loading = detailQuery.isLoading || categoriesQuery.isLoading
 
@@ -421,10 +395,26 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
               {isV2 ? (
                 <>
                   {' '}
-                  · <span className="font-medium text-foreground">{instructorTypeLabel(instructorType)}</span>
+                  ·{' '}
+                  <span className="font-medium text-foreground">
+                    {instructorAccountType === 'both'
+                      ? 'Both (Individual & Academy)'
+                      : instructorTypeLabel(instructorAccountType)}
+                  </span>
                 </>
               ) : null}
             </p>
+          ) : null}
+
+          {needsClassInstructorTypeChoice ? (
+            <div className="space-y-2">
+              <Label>This class is</Label>
+              <InstructorTypeToggle value={classInstructorType} onChange={setClassInstructorType} />
+              <p className="text-xs text-muted-foreground">
+                This instructor's account is "Both" — choose whether this specific class is individual or
+                academy. This determines which subcategories are relevant below.
+              </p>
+            </div>
           ) : null}
 
           {formError ? (
@@ -539,9 +529,6 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
               <p className="text-sm text-destructive">Failed to load categories.</p>
             ) : isV2 ? (
               <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">
-                  Showing categories for {instructorTypeLabel(instructorType)}.
-                </p>
                 <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="category-parent">Category</Label>
@@ -645,7 +632,12 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
 
           <section className="space-y-4">
             <h4 className="font-medium text-foreground">Tags</h4>
-            <ClassTagSelector selectedTags={tags} onTagsChange={setTags} />
+            <ClassTagSelector
+              selectedTags={tags}
+              onTagsChange={setTags}
+              tagGroups={classTagsQuery.data || []}
+              categoryId={categoryId || undefined}
+            />
           </section>
         </div>
       )}
