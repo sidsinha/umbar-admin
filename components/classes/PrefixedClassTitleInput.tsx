@@ -37,6 +37,7 @@ export default function PrefixedClassTitleInput({
   const prefix = classTitlePrefixForType(instructorType).trim()
   const isIndividual = isIndividualClassType(instructorType)
   const subject = lockedSubjectName?.trim() ?? ''
+  const canEditIndividualTail = Boolean(subject) || Boolean(editableTail.trim())
 
   return (
     <div
@@ -57,9 +58,9 @@ export default function PrefixedClassTitleInput({
           <input
             id={id}
             value={editableTail}
-            disabled={disabled || !subject}
+            disabled={disabled || !canEditIndividualTail}
             onChange={(event) => onEditableTailChange(event.target.value)}
-            placeholder={subject ? 'for Beginners' : 'Select a subcategory first'}
+            placeholder={subject ? 'for Beginners' : 'e.g. Piano for Beginners'}
             maxLength={maxLength}
             className={inputClassName}
           />

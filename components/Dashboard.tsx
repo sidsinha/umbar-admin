@@ -178,6 +178,7 @@ function DashboardUsageSummary({ stats }: { stats: AdminStats }) {
   const pageViews = stats.dashboardUsage?.pageViews7d ?? 0
   const navClicks = stats.dashboardUsage?.navClicks7d ?? 0
   const actions = stats.dashboardUsage?.actions7d ?? 0
+  const aiGenerateClicks = stats.dashboardUsage?.aiGenerateClicks7d ?? 0
   const instructors = stats.dashboardUsage?.instructors ?? []
   const instructorIdentitiesAvailable =
     stats.dashboardUsage?.instructorIdentitiesAvailable ?? false
@@ -193,7 +194,7 @@ function DashboardUsageSummary({ stats }: { stats: AdminStats }) {
       <h3 className="text-base font-semibold text-foreground">
         Instructor dashboard usage (last 7 days)
       </h3>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Active instructors
@@ -224,6 +225,14 @@ function DashboardUsageSummary({ stats }: { stats: AdminStats }) {
           </p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
             {actions.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            AI generate clicks
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+            {aiGenerateClicks.toLocaleString()}
           </p>
         </div>
       </div>

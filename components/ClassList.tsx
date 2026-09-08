@@ -1,10 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
-import ClassEditDialog from '@/components/classes/ClassEditDialog'
 import DataTable from '@/components/DataTable'
 import ListFiltersBar from '@/components/ListFiltersBar'
 import PaginationControls from '@/components/PaginationControls'
@@ -37,7 +37,6 @@ export default function ClassList() {
   const [appliedPhone, setAppliedPhone] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
   const [togglingClassId, setTogglingClassId] = useState<string | null>(null)
-  const [editingClassId, setEditingClassId] = useState<string | null>(null)
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
     useCursorPagination()
 
@@ -185,8 +184,8 @@ export default function ClassList() {
               <td className="px-4 py-3">{formatClassCreatedFrom(item.createdFrom)}</td>
               <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
               <td className="px-4 py-3">
-                <Button variant="outline" size="sm" onClick={() => setEditingClassId(item.id)}>
-                  Edit
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/classes/edit/?id=${encodeURIComponent(item.id)}`}>Edit</Link>
                 </Button>
               </td>
             </tr>
@@ -203,7 +202,6 @@ export default function ClassList() {
         onNext={() => goNext(listQuery.data?.pagination.nextCursor ?? null)}
       />
 
-      <ClassEditDialog classId={editingClassId} onClose={() => setEditingClassId(null)} />
     </div>
   )
 }

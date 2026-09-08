@@ -1,9 +1,13 @@
 import type { InstructorType } from '@/lib/instructor-type'
+import { isIndividualClassType } from '@/lib/instructor-type'
 
 export const CLASS_TITLE_PREFIXES: Record<InstructorType, string> = {
   individual: 'I will teach ',
   academy: 'We will teach ',
 }
+
+/** Matches API `sanitizeText(body.name, 200)` in umbar-api class writes. */
+export const CLASS_NAME_MAX_LENGTH = 200
 
 export type CategoryWithChildren = {
   id: string
@@ -19,7 +23,30 @@ export function buildClassTitle(suffix: string, instructorType: InstructorType):
   return `${classTitlePrefixForType(instructorType)}${suffix.trim()}`
 }
 
-export function splitClassTitle(fullTitle: string): { suffix: string; hasPrefix: boolean } {
+export function maxEditableTitleTailLength(
+  instructorType: InstructorType,
+  lockedSubjectName?: string | null,
+): number {
+  const prefixLength = classTitlePrefixForType(instructorType).length
+  if (isIndividualClassType(instructorType)) {
+    const subjectLength = lockedSubjectName?.trim().length ?? 0
+    const subjectSeparator = subjectLength > 0 ? 1 : 0
+    return Math.max(0, CLASS_NAME_MAX_LENGTH - prefixLength - subjectLength - subjectSeparator)
+  }
+  return Math.max(0, CLASS_NAME_MAX_LENGTH - prefixLength)
+}
+
+export function splitClassTitle(
+  fullTitle: string,
+  instructorType?: InstructorType,
+): { suffix: string; hasPrefix: boolean } {
+  if (instructorType) {
+    const preferredPrefix = CLASS_TITLE_PREFIXES[instructorType]
+    if (fullTitle.startsWith(preferredPrefix)) {
+      return { suffix: fullTitle.slice(preferredPrefix.length), hasPrefix: true }
+    }
+  }
+
   for (const prefix of Object.values(CLASS_TITLE_PREFIXES)) {
     if (fullTitle.startsWith(prefix)) {
       return { suffix: fullTitle.slice(prefix.length), hasPrefix: true }
@@ -76,6 +103,32 @@ export function buildSuffixFromSubject(subjectName: string, editableTail: string
   if (!subject) return tail
   if (!tail) return subject
   return `${subject} ${tail}`
+}
+
+export function buildStoredClassNameFromParts(options: {
+  instructorType: InstructorType
+  lockedSubjectName?: string | null
+  editableTail: string
+  academySuffix: string
+}): string {
+  const { instructorType, lockedSubjectName, editableTail, academySuffix } = options
+  if (isIndividualClassType(instructorType)) {
+    const suffix = buildSuffixFromSubject(lockedSubjectName ?? '', editableTail)
+    return buildClassTitle(suffix, 'individual')
+  }
+  return buildClassTitle(academySuffix, 'academy')
+}
+
+export function classNameLengthError(storedName: string): string | null {
+  const length = storedName.trim().length
+  if (length > CLASS_NAME_MAX_LENGTH) {
+    return `Class name is ${length} characters; maximum is ${CLASS_NAME_MAX_LENGTH}. Shorten the title before saving.`
+  }
+  return null
+}
+
+export function classNameCharCountLabel(storedName: string): string {
+  return `${storedName.trim().length}/${CLASS_NAME_MAX_LENGTH} characters`
 }
 
 export function splitSuffixAroundSubject(

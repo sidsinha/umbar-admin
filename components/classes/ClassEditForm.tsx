@@ -1,25 +1,31 @@
 'use client'
 
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 
 import { ClassAIAssistant } from '@/components/classes/ClassAIAssistant'
 import ClassLocationField from '@/components/classes/ClassLocationField'
 import ClassLogoField from '@/components/classes/ClassLogoField'
 import ClassTagSelector from '@/components/classes/ClassTagSelector'
 import PrefixedClassTitleInput from '@/components/classes/PrefixedClassTitleInput'
-import FormDialog from '@/components/FormDialog'
 import InstructorTypeToggle from '@/components/InstructorTypeToggle'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { CLASS_LOGO_TOO_LARGE_MESSAGE, isClassLogoTooLarge } from '@/lib/class-logo'
 import {
-  buildClassTitle,
+  buildStoredClassNameFromParts,
   buildSuffixFromSubject,
+  CLASS_NAME_MAX_LENGTH,
+  classNameCharCountLabel,
+  classNameLengthError,
   classTitlePrefixForType,
+  maxEditableTitleTailLength,
   normalizeAiTitleTails,
   primarySubjectName,
   splitClassTitle,
@@ -39,14 +45,11 @@ import {
   type MarketplaceCategoryV2Parent,
 } from '@/lib/marketplace-api-client'
 
-const CLASS_NAME_MAX_LENGTH = 64
-
 type ClassTypeOption = 'in-person' | 'remote' | 'both'
 type ClassFormStatus = 'active' | 'disabled'
 
-type ClassEditDialogProps = {
-  classId: string | null
-  onClose: () => void
+type ClassEditFormProps = {
+  classId: string
 }
 
 function normalizeClassType(value: string | undefined): ClassTypeOption {
@@ -96,9 +99,9 @@ function detailToFormState(detail: AdminClassDetail) {
   }
 }
 
-export default function ClassEditDialog({ classId, onClose }: ClassEditDialogProps) {
+export default function ClassEditForm({ classId }: ClassEditFormProps) {
+  const router = useRouter()
   const queryClient = useQueryClient()
-  const open = Boolean(classId)
 
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
@@ -137,25 +140,25 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   const detailQuery = useQuery({
     queryKey: ['admin-class-detail', classId],
     queryFn: () => fetchAdminClass(classId!),
-    enabled: open,
+    enabled: Boolean(classId),
   })
 
   const categoriesQuery = useQuery({
     queryKey: ['marketplace-categories', 'v2', 'all'],
     queryFn: fetchCategories,
-    enabled: open,
+    enabled: Boolean(classId),
   })
 
   const countriesQuery = useQuery({
     queryKey: ['marketplace-countries'],
     queryFn: () => fetchSupportedCountries({ marketplaceOnly: true }),
-    enabled: open,
+    enabled: Boolean(classId),
   })
 
   const classTagsQuery = useQuery({
     queryKey: ['marketplace-class-tags'],
     queryFn: fetchClassTags,
-    enabled: open,
+    enabled: Boolean(classId),
   })
 
   const isV2 = categoriesQuery.data ? isV2CategoriesResponse(categoriesQuery.data) : false
@@ -191,13 +194,47 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     Boolean(resolvedOfferingType) &&
     (isV2 ? Boolean(categoryId && subcategoryId) : Boolean(category.trim()))
 
+  const fullClassName = useMemo(
+    () =>
+      buildStoredClassNameFromParts({
+        instructorType: resolvedOfferingType,
+        lockedSubjectName: lockedSubject,
+        editableTail: titleEditableTail,
+        academySuffix: titleSuffix,
+      }),
+    [resolvedOfferingType, lockedSubject, titleEditableTail, titleSuffix],
+  )
+
+  const titleLengthError = classNameLengthError(fullClassName)
+
+  function getFullTitleForTail(tail: string): string {
+    return buildStoredClassNameFromParts({
+      instructorType: resolvedOfferingType,
+      lockedSubjectName: lockedSubject,
+      editableTail: isIndividualClassType(resolvedOfferingType) ? tail : '',
+      academySuffix: isIndividualClassType(resolvedOfferingType) ? '' : tail,
+    })
+  }
+
+  function applyTitleTail(tail: string) {
+    if (isIndividualClassType(resolvedOfferingType)) {
+      setTitleEditableTail(tail)
+    } else {
+      setTitleSuffix(tail)
+    }
+  }
+
   useEffect(() => {
     if (!detailQuery.data?.class) return
     const detail = detailQuery.data.class
     const next = detailToFormState(detail)
 
     const offering = next.instructorType
-    const { suffix } = splitClassTitle(detail.name || '')
+    const needsCategoryLookup =
+      isIndividualClassType(offering) && Boolean(next.subcategoryId) && categoriesQuery.isLoading
+    if (needsCategoryLookup) return
+
+    const { suffix } = splitClassTitle(detail.name || '', offering)
     if (offering === 'academy') {
       setTitleSuffix(suffix)
       setTitleEditableTail('')
@@ -240,7 +277,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     setDefaultFeeCurrency(next.defaultFeeCurrency)
     setFormError(null)
     setFieldError(null)
-  }, [detailQuery.data, v2Categories, isV2])
+  }, [detailQuery.data, v2Categories, isV2, categoriesQuery.isLoading])
 
   useEffect(() => {
     if (country || !countriesQuery.data?.length) return
@@ -255,7 +292,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
         queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
         queryClient.invalidateQueries({ queryKey: ['admin-class-detail', classId] }),
       ])
-      onClose()
+      router.push('/classes/')
     },
     onError: (error) => {
       setFormError(error instanceof Error ? error.message : 'Failed to save class.')
@@ -263,11 +300,29 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   })
 
   function buildStoredClassName(): string {
-    if (isIndividualClassType(resolvedOfferingType)) {
-      const suffix = buildSuffixFromSubject(lockedSubject ?? '', titleEditableTail)
-      return buildClassTitle(suffix, 'individual').slice(0, CLASS_NAME_MAX_LENGTH)
+    return fullClassName.trim()
+  }
+
+  function handleOfferingTypeChange(nextType: InstructorType) {
+    if (nextType === classInstructorType) return
+
+    if (nextType === 'academy') {
+      const migratedSuffix = buildSuffixFromSubject(lockedSubject ?? '', titleEditableTail).trim()
+      if (migratedSuffix) {
+        setTitleSuffix(migratedSuffix)
+      }
+      setTitleEditableTail('')
+    } else {
+      const migratedTail = lockedSubject
+        ? splitSuffixAroundSubject(titleSuffix, lockedSubject).editableTail
+        : titleSuffix.trim()
+      if (migratedTail) {
+        setTitleEditableTail(migratedTail)
+      }
+      setTitleSuffix('')
     }
-    return buildClassTitle(titleSuffix, 'academy').slice(0, CLASS_NAME_MAX_LENGTH)
+
+    setClassInstructorType(nextType)
   }
 
   function clearResolvedLocation() {
@@ -323,11 +378,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
         setTags((current) => [...new Set([...current, ...result.suggestedTags])])
       }
       if (normalizedTitles.length > 0) {
-        if (isIndividualClassType(resolvedOfferingType)) {
-          setTitleEditableTail(normalizedTitles[0])
-        } else {
-          setTitleSuffix(normalizedTitles[0])
-        }
+        applyTitleTail(normalizedTitles[0])
         ai.setSelectedTitleIndex(0)
       }
     })
@@ -335,11 +386,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
 
   function handleSelectAiTitle(index: number, title: string) {
     ai.setSelectedTitleIndex(index)
-    if (isIndividualClassType(resolvedOfferingType)) {
-      setTitleEditableTail(title)
-    } else {
-      setTitleSuffix(title)
-    }
+    applyTitleTail(title)
   }
 
   function validateForm(): AdminClassUpdateBody | null {
@@ -351,8 +398,8 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
       setFormError('Class name is required.')
       return null
     }
-    if (storedName.trim().length > CLASS_NAME_MAX_LENGTH) {
-      setFormError(`Class name must be ${CLASS_NAME_MAX_LENGTH} characters or less.`)
+    if (titleLengthError) {
+      setFormError(titleLengthError)
       return null
     }
 
@@ -459,9 +506,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     saveMutation.mutate(body)
   }
 
-  const instructorLabel = detailQuery.data
-    ? [detailQuery.data.instructorName, detailQuery.data.instructorEmail].filter(Boolean).join(' · ')
-    : ''
+  const instructorName = detailQuery.data?.instructorName?.trim() || ''
 
   const offeringDiffersFromAccount =
     instructorAccountType !== 'both' && instructorAccountType !== resolvedOfferingType
@@ -469,15 +514,41 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   const loading = detailQuery.isLoading || categoriesQuery.isLoading
 
   return (
-    <FormDialog
-      open={open}
-      title={detailQuery.data?.class?.name ? `Edit class: ${detailQuery.data.class.name}` : 'Edit class'}
-      saving={saveMutation.isPending}
-      saveDisabled={loading || detailQuery.isError}
-      onSave={handleSave}
-      onCancel={onClose}
-      className="max-w-3xl"
-    >
+    <div className="mx-auto max-w-3xl">
+      <Link
+        href="/classes/"
+        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        Back to classes
+      </Link>
+
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-foreground">Edit class</h2>
+          {detailQuery.data?.class?.name ? (
+            <p className="mt-1 text-sm text-muted-foreground">{detailQuery.data.class.name}</p>
+          ) : null}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={saveMutation.isPending}
+            onClick={() => router.push('/classes/')}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={loading || detailQuery.isError || saveMutation.isPending}
+          >
+            {saveMutation.isPending ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -487,10 +558,10 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
           {detailQuery.error instanceof Error ? detailQuery.error.message : 'Failed to load class.'}
         </p>
       ) : (
-        <div className="space-y-8">
-          {instructorLabel ? (
+        <div className="space-y-8 pb-8">
+          {instructorName ? (
             <p className="text-sm text-muted-foreground">
-              Instructor: {instructorLabel}
+              Instructor: <span className="font-medium text-foreground">{instructorName}</span>
               {isV2 ? (
                 <>
                   {' '}
@@ -515,7 +586,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
             <h4 className="font-medium text-foreground">Offering & delivery</h4>
             <div className="space-y-2">
               <Label>Offering type</Label>
-              <InstructorTypeToggle value={classInstructorType} onChange={setClassInstructorType} />
+              <InstructorTypeToggle value={classInstructorType} onChange={handleOfferingTypeChange} />
               {offeringDiffersFromAccount ? (
                 <p className="text-xs text-muted-foreground">
                   This instructor&apos;s account is {instructorTypeLabel(instructorAccountType)}. The
@@ -561,12 +632,10 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
           </section>
 
           <section className="space-y-4">
-            <h4 className="font-medium text-foreground">Category</h4>
             {categoriesQuery.isError ? (
               <p className="text-sm text-destructive">Failed to load categories.</p>
             ) : isV2 ? (
-              <div className="space-y-3">
-                <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="category-parent">Category</Label>
                     <select
@@ -601,8 +670,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
                           {item.name}
                         </option>
                       ))}
-                    </select>
-                  </div>
+                  </select>
                 </div>
               </div>
             ) : (
@@ -625,8 +693,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
             )}
           </section>
 
-          <section className="space-y-4">
-            <h4 className="font-medium text-foreground">Generate with AI</h4>
+          <section>
             <ClassAIAssistant
               freeformNotes={ai.freeformNotes}
               onFreeformNotesChange={ai.setFreeformNotes}
@@ -639,7 +706,8 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
               disabled={!aiReady}
               generateDisabled={!aiReady}
               onGenerate={() => void handleGenerateWithAI()}
-              suggestionTitlePrefix={classTitlePrefixForType(resolvedOfferingType)}
+              getFullTitleForTail={getFullTitleForTail}
+              titleMaxLength={CLASS_NAME_MAX_LENGTH}
             />
             {!aiReady ? (
               <p className="text-xs text-muted-foreground">
@@ -660,7 +728,24 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
                 onEditableTailChange={setTitleEditableTail}
                 academySuffix={titleSuffix}
                 onAcademySuffixChange={setTitleSuffix}
+                maxLength={maxEditableTitleTailLength(resolvedOfferingType, lockedSubject)}
               />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <p
+                  className={
+                    titleLengthError ? 'font-medium text-destructive' : 'text-muted-foreground'
+                  }
+                >
+                  {titleLengthError ?? `Saved title limit: ${CLASS_NAME_MAX_LENGTH} characters.`}
+                </p>
+                <p
+                  className={
+                    titleLengthError ? 'font-medium text-destructive' : 'text-muted-foreground'
+                  }
+                >
+                  {classNameCharCountLabel(fullClassName)}
+                </p>
+              </div>
             </div>
             <ClassLogoField
               value={classLogo}
@@ -692,21 +777,18 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
           </section>
 
           {!isIndividualClassType(resolvedOfferingType) ? (
-            <section className="space-y-4">
+            <section className="space-y-2">
               <h4 className="font-medium text-foreground">Academy / Coaching name</h4>
-              <div className="space-y-2">
-                <Label htmlFor="organization-name">Academy / Coaching name</Label>
-                <Input
-                  id="organization-name"
-                  value={organizationName}
-                  maxLength={80}
-                  placeholder="e.g. Sunrise Music Academy"
-                  onChange={(event) => setOrganizationName(event.target.value.slice(0, 80))}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Saved to the instructor profile and shown on academy class listings.
-                </p>
-              </div>
+              <Input
+                id="organization-name"
+                value={organizationName}
+                maxLength={80}
+                placeholder="e.g. Sunrise Music Academy"
+                onChange={(event) => setOrganizationName(event.target.value.slice(0, 80))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Saved to the instructor profile and shown on academy class listings.
+              </p>
             </section>
           ) : null}
 
@@ -784,6 +866,6 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
           </section>
         </div>
       )}
-    </FormDialog>
+    </div>
   )
 }

@@ -20,6 +20,8 @@ export function ClassAIAssistant({
   generateDisabled,
   onGenerate,
   suggestionTitlePrefix,
+  getFullTitleForTail,
+  titleMaxLength,
 }: {
   freeformNotes: string
   onFreeformNotesChange: (value: string) => void
@@ -33,6 +35,8 @@ export function ClassAIAssistant({
   generateDisabled?: boolean
   onGenerate: () => void
   suggestionTitlePrefix?: string
+  getFullTitleForTail?: (tail: string) => string
+  titleMaxLength?: number
 }) {
   return (
     <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
@@ -86,9 +90,13 @@ export function ClassAIAssistant({
           </p>
           {titles.map((title, index) => {
             const isSelected = index === selectedTitleIndex
-            const displayTitle = suggestionTitlePrefix
-              ? `${suggestionTitlePrefix.trimEnd()}${title.trim() ? ` ${title.trim()}` : ''}`
-              : title
+            const displayTitle = getFullTitleForTail
+              ? getFullTitleForTail(title)
+              : suggestionTitlePrefix
+                ? `${suggestionTitlePrefix.trimEnd()}${title.trim() ? ` ${title.trim()}` : ''}`
+                : title
+            const isTooLong =
+              typeof titleMaxLength === 'number' && displayTitle.trim().length > titleMaxLength
             return (
               <label
                 key={index}
@@ -97,6 +105,7 @@ export function ClassAIAssistant({
                   isSelected
                     ? 'border-primary bg-primary/5 font-medium text-primary'
                     : 'border-border bg-background hover:bg-muted/50',
+                  isTooLong && 'border-destructive/40',
                 )}
               >
                 <input
@@ -107,7 +116,11 @@ export function ClassAIAssistant({
                   onChange={() => onSelectTitle(index, title)}
                 />
                 <span className="flex-1">{displayTitle}</span>
-                {index === 0 ? (
+                {isTooLong ? (
+                  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-destructive">
+                    Too long
+                  </span>
+                ) : index === 0 ? (
                   <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     Recommended
                   </span>
