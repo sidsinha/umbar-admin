@@ -28,3 +28,7 @@ export const INSTRUCTOR_TYPE_OPTIONS: InstructorTypeDefinition[] = [
 export function instructorTypeLabel(type: InstructorType): string {
   return INSTRUCTOR_TYPE_DEFINITIONS[type]?.label ?? INSTRUCTOR_TYPE_DEFINITIONS.individual.label
 }
+
+export function isIndividualClassType(type: InstructorType): boolean {
+  return type === 'individual'
+}

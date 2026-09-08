@@ -134,14 +134,17 @@ export async function fetchAdminClass(classId: string): Promise<AdminClassDetail
 export async function updateAdminClass(
   classId: string,
   body: AdminClassUpdateBody,
-): Promise<{ success: true; class: AdminClassDetailResponse['class'] }> {
+): Promise<{ success: true; class: AdminClassDetailResponse['class']; organizationName?: string | null }> {
   const payload = await fetchAdminApiPost(
     `${ADMIN_OPS_ROOT}/classes/${encodeURIComponent(classId)}/update`,
     body as unknown as Record<string, unknown>,
   )
-  return payload as unknown as { success: true; class: AdminClassDetailResponse['class'] }
+  return payload as unknown as {
+    success: true
+    class: AdminClassDetailResponse['class']
+    organizationName?: string | null
+  }
 }
-
 export async function fetchAdminStudents(
   params: ListQueryParams = {},
 ): Promise<AdminListResult<AdminStudent>> {

@@ -133,6 +133,7 @@ export type AdminClassDetailResponse = {
   instructorEmail: string | null
   /** The instructor's account type — may be "both", in which case each class picks its own type. */
   instructorType: 'individual' | 'academy' | 'both'
+  organizationName: string | null
 }
 
 export type AdminClassUpdateBody = {
@@ -150,6 +151,7 @@ export type AdminClassUpdateBody = {
   tags: string[]
   status: string
   instructorType?: 'individual' | 'academy'
+  organizationName?: string | null
   defaultFee?: ClassDefaultFee | null
 }
 
@@ -209,6 +211,7 @@ export type AdminStats = {
     pageViews7d: number
     navClicks7d: number
     actions7d: number
+    aiGenerateClicks7d: number
     screens: { screenName: string; pageTitle: string; count: number }[]
     navItems: { navItem: string; count: number }[]
     actionItems: { action: string; label: string; count: number }[]

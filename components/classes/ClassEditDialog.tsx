@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
+import { ClassAIAssistant } from '@/components/classes/ClassAIAssistant'
 import ClassLocationField from '@/components/classes/ClassLocationField'
 import ClassLogoField from '@/components/classes/ClassLogoField'
 import ClassTagSelector from '@/components/classes/ClassTagSelector'
+import PrefixedClassTitleInput from '@/components/classes/PrefixedClassTitleInput'
 import FormDialog from '@/components/FormDialog'
 import InstructorTypeToggle from '@/components/InstructorTypeToggle'
 import { Input } from '@/components/ui/input'
@@ -14,9 +16,20 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { CLASS_LOGO_TOO_LARGE_MESSAGE, isClassLogoTooLarge } from '@/lib/class-logo'
+import {
+  buildClassTitle,
+  buildSuffixFromSubject,
+  classTitlePrefixForType,
+  normalizeAiTitleTails,
+  primarySubjectName,
+  splitClassTitle,
+  splitSuffixAroundSubject,
+} from '@/lib/class-title'
 import { fetchAdminClass, updateAdminClass } from '@/lib/admin-ops-api-client'
 import type { AdminClassDetail, AdminClassUpdateBody, ClassDefaultFee, ClassLocation } from '@/lib/admin-types'
-import { instructorTypeLabel, type InstructorType } from '@/lib/instructor-type'
+import { generateAdminClassContent } from '@/lib/generate-class-content'
+import { useClassAIGenerator } from '@/lib/hooks/use-class-ai-generator'
+import { instructorTypeLabel, isIndividualClassType, type InstructorType } from '@/lib/instructor-type'
 import {
   fetchCategories,
   fetchClassTags,
@@ -48,7 +61,6 @@ function normalizeLocationAreaLabel(value: string): string {
 function detailToFormState(detail: AdminClassDetail) {
   const location = detail.location
   return {
-    name: (detail.name || '').slice(0, CLASS_NAME_MAX_LENGTH),
     description: detail.description || '',
     whatStudentsWillLearn: detail.whatStudentsWillLearn || '',
     classType: normalizeClassType(detail.classType),
@@ -91,7 +103,9 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
 
-  const [name, setName] = useState('')
+  const [titleEditableTail, setTitleEditableTail] = useState('')
+  const [titleSuffix, setTitleSuffix] = useState('')
+  const [organizationName, setOrganizationName] = useState('')
   const [description, setDescription] = useState('')
   const [whatStudentsWillLearn, setWhatStudentsWillLearn] = useState('')
   const [classType, setClassType] = useState<ClassTypeOption>('in-person')
@@ -117,6 +131,8 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
   const [defaultFeeAmountText, setDefaultFeeAmountText] = useState('')
   const [defaultFeeBasis, setDefaultFeeBasis] = useState<'per_class' | 'per_month'>('per_class')
   const [defaultFeeCurrency, setDefaultFeeCurrency] = useState('INR')
+
+  const ai = useClassAIGenerator(generateAdminClassContent)
 
   const detailQuery = useQuery({
     queryKey: ['admin-class-detail', classId],
@@ -159,10 +175,44 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     return first?.placesIso2 || 'IN'
   }, [countriesQuery.data, country])
 
+  const instructorAccountType = detailQuery.data?.instructorType ?? 'individual'
+  const resolvedOfferingType: InstructorType = classInstructorType
+
+  const lockedSubject = useMemo(() => {
+    if (!isIndividualClassType(resolvedOfferingType) || !isV2) return null
+    return primarySubjectName(v2Categories, subcategoryId)
+  }, [resolvedOfferingType, isV2, v2Categories, subcategoryId])
+
+  const parentOptions: MarketplaceCategoryV2Parent[] = isV2 ? v2Categories : []
+  const selectedParent = v2Categories.find((item) => item.id === categoryId) ?? null
+  const subcategoryOptions: MarketplaceCategoryV2Child[] = isV2 ? selectedParent?.children ?? [] : []
+
+  const aiReady =
+    Boolean(resolvedOfferingType) &&
+    (isV2 ? Boolean(categoryId && subcategoryId) : Boolean(category.trim()))
+
   useEffect(() => {
     if (!detailQuery.data?.class) return
-    const next = detailToFormState(detailQuery.data.class)
-    setName(next.name)
+    const detail = detailQuery.data.class
+    const next = detailToFormState(detail)
+
+    const offering = next.instructorType
+    const { suffix } = splitClassTitle(detail.name || '')
+    if (offering === 'academy') {
+      setTitleSuffix(suffix)
+      setTitleEditableTail('')
+    } else {
+      const subject =
+        isV2 && next.subcategoryId ? primarySubjectName(v2Categories, next.subcategoryId) : null
+      if (subject) {
+        setTitleEditableTail(splitSuffixAroundSubject(suffix, subject).editableTail)
+      } else {
+        setTitleEditableTail(suffix)
+      }
+      setTitleSuffix('')
+    }
+
+    setOrganizationName(detailQuery.data.organizationName ?? '')
     setDescription(next.description)
     setWhatStudentsWillLearn(next.whatStudentsWillLearn)
     setClassType(next.classType)
@@ -190,7 +240,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     setDefaultFeeCurrency(next.defaultFeeCurrency)
     setFormError(null)
     setFieldError(null)
-  }, [detailQuery.data])
+  }, [detailQuery.data, v2Categories, isV2])
 
   useEffect(() => {
     if (country || !countriesQuery.data?.length) return
@@ -211,6 +261,14 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
       setFormError(error instanceof Error ? error.message : 'Failed to save class.')
     },
   })
+
+  function buildStoredClassName(): string {
+    if (isIndividualClassType(resolvedOfferingType)) {
+      const suffix = buildSuffixFromSubject(lockedSubject ?? '', titleEditableTail)
+      return buildClassTitle(suffix, 'individual').slice(0, CLASS_NAME_MAX_LENGTH)
+    }
+    return buildClassTitle(titleSuffix, 'academy').slice(0, CLASS_NAME_MAX_LENGTH)
+  }
 
   function clearResolvedLocation() {
     setPlaceId('')
@@ -242,15 +300,64 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     setLng(resolved.lng)
   }
 
+  async function handleGenerateWithAI() {
+    const input = {
+      categoryId: isV2 ? categoryId : undefined,
+      subcategoryId: isV2 ? subcategoryId : undefined,
+      category: isV2 ? undefined : category.trim() || undefined,
+      classType,
+      instructorType: resolvedOfferingType,
+      freeformNotes: ai.freeformNotes.trim() || undefined,
+    }
+
+    await ai.generateContent(input, (result) => {
+      const normalizedTitles = normalizeAiTitleTails(
+        result.titles,
+        resolvedOfferingType,
+        lockedSubject,
+      )
+      ai.setTitles(normalizedTitles)
+      setDescription(result.description)
+      setWhatStudentsWillLearn(result.whatStudentsWillLearn.join('\n'))
+      if (result.suggestedTags.length > 0) {
+        setTags((current) => [...new Set([...current, ...result.suggestedTags])])
+      }
+      if (normalizedTitles.length > 0) {
+        if (isIndividualClassType(resolvedOfferingType)) {
+          setTitleEditableTail(normalizedTitles[0])
+        } else {
+          setTitleSuffix(normalizedTitles[0])
+        }
+        ai.setSelectedTitleIndex(0)
+      }
+    })
+  }
+
+  function handleSelectAiTitle(index: number, title: string) {
+    ai.setSelectedTitleIndex(index)
+    if (isIndividualClassType(resolvedOfferingType)) {
+      setTitleEditableTail(title)
+    } else {
+      setTitleSuffix(title)
+    }
+  }
+
   function validateForm(): AdminClassUpdateBody | null {
     setFormError(null)
 
-    if (!name.trim()) {
+    const storedName = buildStoredClassName()
+    const prefixOnly = storedName.trim() === classTitlePrefixForType(resolvedOfferingType).trim()
+    if (!storedName.trim() || prefixOnly) {
       setFormError('Class name is required.')
       return null
     }
-    if (name.trim().length > CLASS_NAME_MAX_LENGTH) {
+    if (storedName.trim().length > CLASS_NAME_MAX_LENGTH) {
       setFormError(`Class name must be ${CLASS_NAME_MAX_LENGTH} characters or less.`)
+      return null
+    }
+
+    if (!isIndividualClassType(resolvedOfferingType) && !organizationName.trim()) {
+      setFormError('Academy / coaching name is required for academy classes.')
       return null
     }
 
@@ -316,7 +423,7 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
         : null
 
     const body: AdminClassUpdateBody = {
-      name: name.trim(),
+      name: storedName.trim(),
       description: description.trim(),
       whatStudentsWillLearn: whatStudentsWillLearn.trim(),
       classType,
@@ -325,8 +432,11 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
       hasTrialClass,
       tags,
       status: classStatus,
-      instructorType: resolvedInstructorType,
+      instructorType: resolvedOfferingType,
       defaultFee,
+      organizationName: isIndividualClassType(resolvedOfferingType)
+        ? organizationName.trim() || null
+        : organizationName.trim(),
     }
 
     if (isV2) {
@@ -353,19 +463,8 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
     ? [detailQuery.data.instructorName, detailQuery.data.instructorEmail].filter(Boolean).join(' · ')
     : ''
 
-  const instructorAccountType = detailQuery.data?.instructorType ?? 'individual'
-  const needsClassInstructorTypeChoice = instructorAccountType === 'both'
-  const resolvedInstructorType: InstructorType = needsClassInstructorTypeChoice
-    ? classInstructorType
-    : instructorAccountType === 'academy'
-      ? 'academy'
-      : 'individual'
-
-  const parentOptions: MarketplaceCategoryV2Parent[] = isV2 ? v2Categories : []
-
-  const selectedParent = v2Categories.find((item) => item.id === categoryId) ?? null
-
-  const subcategoryOptions: MarketplaceCategoryV2Child[] = isV2 ? selectedParent?.children ?? [] : []
+  const offeringDiffersFromAccount =
+    instructorAccountType !== 'both' && instructorAccountType !== resolvedOfferingType
 
   const loading = detailQuery.isLoading || categoriesQuery.isLoading
 
@@ -406,17 +505,6 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
             </p>
           ) : null}
 
-          {needsClassInstructorTypeChoice ? (
-            <div className="space-y-2">
-              <Label>This class is</Label>
-              <InstructorTypeToggle value={classInstructorType} onChange={setClassInstructorType} />
-              <p className="text-xs text-muted-foreground">
-                This instructor's account is "Both" — choose whether this specific class is individual or
-                academy. This determines which subcategories are relevant below.
-              </p>
-            </div>
-          ) : null}
-
           {formError ? (
             <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {formError}
@@ -424,49 +512,19 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
           ) : null}
 
           <section className="space-y-4">
-            <h4 className="font-medium text-foreground">Basic</h4>
+            <h4 className="font-medium text-foreground">Offering & delivery</h4>
             <div className="space-y-2">
-              <Label htmlFor="class-name">Name</Label>
-              <Input
-                id="class-name"
-                value={name}
-                maxLength={CLASS_NAME_MAX_LENGTH}
-                onChange={(event) => setName(event.target.value.slice(0, CLASS_NAME_MAX_LENGTH))}
-              />
-            </div>
-            <ClassLogoField
-              value={classLogo}
-              onChange={(value) => {
-                setClassLogo(value)
-                setLogoChanged(true)
-              }}
-              onError={setFieldError}
-            />
-            {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
-            <div className="space-y-2">
-              <Label htmlFor="class-description">Description</Label>
-              <Textarea
-                id="class-description"
-                value={description}
-                rows={4}
-                onChange={(event) => setDescription(event.target.value)}
-              />
+              <Label>Offering type</Label>
+              <InstructorTypeToggle value={classInstructorType} onChange={setClassInstructorType} />
+              {offeringDiffersFromAccount ? (
+                <p className="text-xs text-muted-foreground">
+                  This instructor&apos;s account is {instructorTypeLabel(instructorAccountType)}. The
+                  offering type above applies to this class only.
+                </p>
+              ) : null}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="class-learn">What students will learn</Label>
-              <Textarea
-                id="class-learn"
-                value={whatStudentsWillLearn}
-                rows={3}
-                onChange={(event) => setWhatStudentsWillLearn(event.target.value)}
-              />
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <h4 className="font-medium text-foreground">Type & location</h4>
-            <div className="space-y-2">
-              <Label htmlFor="class-type">Class type</Label>
+              <Label htmlFor="class-type">Delivery mode</Label>
               <select
                 id="class-type"
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -503,69 +561,48 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
           </section>
 
           <section className="space-y-4">
-            <h4 className="font-medium text-foreground">Settings</h4>
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
-              <div>
-                <p className="text-sm font-medium">Offer trial class</p>
-                <p className="text-xs text-muted-foreground">Students can request a trial session.</p>
-              </div>
-              <Switch checked={hasTrialClass} onCheckedChange={setHasTrialClass} />
-            </div>
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
-              <div>
-                <p className="text-sm font-medium">Visible on marketplace</p>
-                <p className="text-xs text-muted-foreground">Disabled classes are hidden from discovery.</p>
-              </div>
-              <Switch
-                checked={classStatus === 'active'}
-                onCheckedChange={(enabled) => setClassStatus(enabled ? 'active' : 'disabled')}
-              />
-            </div>
-          </section>
-
-          <section className="space-y-4">
             <h4 className="font-medium text-foreground">Category</h4>
             {categoriesQuery.isError ? (
               <p className="text-sm text-destructive">Failed to load categories.</p>
             ) : isV2 ? (
               <div className="space-y-3">
                 <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="category-parent">Category</Label>
-                  <select
-                    id="category-parent"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={categoryId}
-                    onChange={(event) => {
-                      setCategoryId(event.target.value)
-                      setSubcategoryId('')
-                    }}
-                  >
-                    <option value="">Select category</option>
-                    {parentOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="category-child">Subcategory</Label>
-                  <select
-                    id="category-child"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={subcategoryId}
-                    onChange={(event) => setSubcategoryId(event.target.value)}
-                    disabled={!categoryId}
-                  >
-                    <option value="">Select subcategory</option>
-                    {subcategoryOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category-parent">Category</Label>
+                    <select
+                      id="category-parent"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={categoryId}
+                      onChange={(event) => {
+                        setCategoryId(event.target.value)
+                        setSubcategoryId('')
+                      }}
+                    >
+                      <option value="">Select category</option>
+                      {parentOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category-child">Subcategory</Label>
+                    <select
+                      id="category-child"
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={subcategoryId}
+                      onChange={(event) => setSubcategoryId(event.target.value)}
+                      disabled={!categoryId}
+                    >
+                      <option value="">Select subcategory</option>
+                      {subcategoryOptions.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -586,6 +623,112 @@ export default function ClassEditDialog({ classId, onClose }: ClassEditDialogPro
                 </select>
               </div>
             )}
+          </section>
+
+          <section className="space-y-4">
+            <h4 className="font-medium text-foreground">Generate with AI</h4>
+            <ClassAIAssistant
+              freeformNotes={ai.freeformNotes}
+              onFreeformNotesChange={ai.setFreeformNotes}
+              isGenerating={ai.isGenerating}
+              hasGeneratedOnce={ai.hasGeneratedOnce}
+              error={ai.error}
+              titles={ai.titles}
+              selectedTitleIndex={ai.selectedTitleIndex}
+              onSelectTitle={handleSelectAiTitle}
+              disabled={!aiReady}
+              generateDisabled={!aiReady}
+              onGenerate={() => void handleGenerateWithAI()}
+              suggestionTitlePrefix={classTitlePrefixForType(resolvedOfferingType)}
+            />
+            {!aiReady ? (
+              <p className="text-xs text-muted-foreground">
+                Select a category and offering type to enable AI generation.
+              </p>
+            ) : null}
+          </section>
+
+          <section className="space-y-4">
+            <h4 className="font-medium text-foreground">Basic</h4>
+            <div className="space-y-2">
+              <Label htmlFor="class-name">Name</Label>
+              <PrefixedClassTitleInput
+                id="class-name"
+                instructorType={resolvedOfferingType}
+                lockedSubjectName={lockedSubject}
+                editableTail={titleEditableTail}
+                onEditableTailChange={setTitleEditableTail}
+                academySuffix={titleSuffix}
+                onAcademySuffixChange={setTitleSuffix}
+              />
+            </div>
+            <ClassLogoField
+              value={classLogo}
+              onChange={(value) => {
+                setClassLogo(value)
+                setLogoChanged(true)
+              }}
+              onError={setFieldError}
+            />
+            {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
+            <div className="space-y-2">
+              <Label htmlFor="class-description">Description</Label>
+              <Textarea
+                id="class-description"
+                value={description}
+                rows={4}
+                onChange={(event) => setDescription(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="class-learn">What students will learn</Label>
+              <Textarea
+                id="class-learn"
+                value={whatStudentsWillLearn}
+                rows={3}
+                onChange={(event) => setWhatStudentsWillLearn(event.target.value)}
+              />
+            </div>
+          </section>
+
+          {!isIndividualClassType(resolvedOfferingType) ? (
+            <section className="space-y-4">
+              <h4 className="font-medium text-foreground">Academy / Coaching name</h4>
+              <div className="space-y-2">
+                <Label htmlFor="organization-name">Academy / Coaching name</Label>
+                <Input
+                  id="organization-name"
+                  value={organizationName}
+                  maxLength={80}
+                  placeholder="e.g. Sunrise Music Academy"
+                  onChange={(event) => setOrganizationName(event.target.value.slice(0, 80))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Saved to the instructor profile and shown on academy class listings.
+                </p>
+              </div>
+            </section>
+          ) : null}
+
+          <section className="space-y-4">
+            <h4 className="font-medium text-foreground">Settings</h4>
+            <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
+              <div>
+                <p className="text-sm font-medium">Offer trial class</p>
+                <p className="text-xs text-muted-foreground">Students can request a trial session.</p>
+              </div>
+              <Switch checked={hasTrialClass} onCheckedChange={setHasTrialClass} />
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-md border border-border px-3 py-2">
+              <div>
+                <p className="text-sm font-medium">Visible on marketplace</p>
+                <p className="text-xs text-muted-foreground">Disabled classes are hidden from discovery.</p>
+              </div>
+              <Switch
+                checked={classStatus === 'active'}
+                onCheckedChange={(enabled) => setClassStatus(enabled ? 'active' : 'disabled')}
+              />
+            </div>
           </section>
 
           <section className="space-y-4">
