@@ -47,9 +47,12 @@ export function formatSignupSource(signupSource: Record<string, unknown> | null 
   return '—'
 }
 
-export function formatClassCreatedFrom(createdFrom: 'website' | 'app' | null | undefined) {
+export function formatClassCreatedFrom(
+  createdFrom: 'website' | 'app' | 'admin' | null | undefined,
+) {
   if (createdFrom === 'website') return 'Website'
   if (createdFrom === 'app') return 'App'
+  if (createdFrom === 'admin') return 'Admin'
   return '—'
 }
 

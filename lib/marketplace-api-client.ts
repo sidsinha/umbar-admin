@@ -29,6 +29,8 @@ export type ClassTagGroup = {
   label: string
   /** null => shown for every category; else only shown when the class's categoryId is in this list. */
   visibleForCategoryIds: string[] | null
+  /** null => no denylist; else hidden when the class's parent category is in this list. */
+  hiddenForCategoryIds: string[] | null
   options: string[]
 }
 
@@ -89,6 +91,12 @@ export function isV2CategoriesResponse(
   return response.meta?.taxonomy === 'v2'
 }
 
+function parseCategoryIds(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null
+  const ids = value.map((item) => String(item ?? '').trim()).filter(Boolean)
+  return ids.length ? ids : null
+}
+
 function parseTagGroups(list: unknown): ClassTagGroup[] {
   if (!Array.isArray(list)) return []
   return list
@@ -97,6 +105,7 @@ function parseTagGroups(list: unknown): ClassTagGroup[] {
         id?: string
         label?: string
         visibleForCategoryIds?: unknown
+        hiddenForCategoryIds?: unknown
         options?: unknown[]
       }
       const id = String(row?.id || '').trim()
@@ -104,22 +113,28 @@ function parseTagGroups(list: unknown): ClassTagGroup[] {
       const options = Array.isArray(row?.options)
         ? row.options.map((value) => String(value ?? '').trim()).filter(Boolean)
         : []
-      const visibleForCategoryIds = Array.isArray(row?.visibleForCategoryIds)
-        ? row.visibleForCategoryIds.map((value) => String(value ?? '').trim()).filter(Boolean)
-        : null
       return {
         id,
         label,
-        visibleForCategoryIds:
-          visibleForCategoryIds && visibleForCategoryIds.length > 0 ? visibleForCategoryIds : null,
+        visibleForCategoryIds: parseCategoryIds(row?.visibleForCategoryIds),
+        hiddenForCategoryIds: parseCategoryIds(row?.hiddenForCategoryIds),
         options,
       }
     })
     .filter((item) => item.id && item.label)
 }
 
-export async function fetchClassTags(): Promise<ClassTagGroup[]> {
-  const response = await fetch(buildUrl('/api/marketplace/class-tags'))
+export async function fetchClassTags(options?: {
+  parentCategoryIds?: string[]
+}): Promise<ClassTagGroup[]> {
+  const params: Record<string, string> = {}
+  if (options?.parentCategoryIds !== undefined) {
+    params.parentCategoryIds = options.parentCategoryIds
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .join(',')
+  }
+  const response = await fetch(buildUrl('/api/marketplace/class-tags', Object.keys(params).length ? params : undefined))
   const payload = await parseJson<ClassTagsResponse>(response)
   return parseTagGroups(payload.tagGroups)
 }

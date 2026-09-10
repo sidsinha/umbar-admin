@@ -14,7 +14,6 @@ const inputClassName =
 type PrefixedClassTitleInputProps = {
   id: string
   instructorType: InstructorType
-  lockedSubjectName?: string | null
   editableTail: string
   onEditableTailChange: (value: string) => void
   academySuffix?: string
@@ -26,7 +25,6 @@ type PrefixedClassTitleInputProps = {
 export default function PrefixedClassTitleInput({
   id,
   instructorType,
-  lockedSubjectName,
   editableTail,
   onEditableTailChange,
   academySuffix = '',
@@ -36,8 +34,8 @@ export default function PrefixedClassTitleInput({
 }: PrefixedClassTitleInputProps) {
   const prefix = classTitlePrefixForType(instructorType).trim()
   const isIndividual = isIndividualClassType(instructorType)
-  const subject = lockedSubjectName?.trim() ?? ''
-  const canEditIndividualTail = Boolean(subject) || Boolean(editableTail.trim())
+  const value = isIndividual ? editableTail : academySuffix
+  const onChange = isIndividual ? onEditableTailChange : onAcademySuffixChange
 
   return (
     <div
@@ -48,34 +46,15 @@ export default function PrefixedClassTitleInput({
     >
       <span className={segmentClassName}>{prefix}</span>
 
-      {isIndividual ? (
-        <>
-          {subject ? (
-            <span className={segmentClassName} aria-hidden>
-              {subject}
-            </span>
-          ) : null}
-          <input
-            id={id}
-            value={editableTail}
-            disabled={disabled || !canEditIndividualTail}
-            onChange={(event) => onEditableTailChange(event.target.value)}
-            placeholder={subject ? 'for Beginners' : 'e.g. Piano for Beginners'}
-            maxLength={maxLength}
-            className={inputClassName}
-          />
-        </>
-      ) : (
-        <input
-          id={id}
-          value={academySuffix}
-          disabled={disabled}
-          onChange={(event) => onAcademySuffixChange?.(event.target.value)}
-          placeholder="Your Subject for Beginners"
-          maxLength={maxLength}
-          className={inputClassName}
-        />
-      )}
+      <input
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange?.(event.target.value)}
+        placeholder={isIndividual ? 'Math for Beginners' : 'Your Subject for Beginners'}
+        maxLength={maxLength}
+        className={inputClassName}
+      />
     </div>
   )
 }

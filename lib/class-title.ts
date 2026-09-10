@@ -25,14 +25,9 @@ export function buildClassTitle(suffix: string, instructorType: InstructorType):
 
 export function maxEditableTitleTailLength(
   instructorType: InstructorType,
-  lockedSubjectName?: string | null,
+  _lockedSubjectName?: string | null,
 ): number {
   const prefixLength = classTitlePrefixForType(instructorType).length
-  if (isIndividualClassType(instructorType)) {
-    const subjectLength = lockedSubjectName?.trim().length ?? 0
-    const subjectSeparator = subjectLength > 0 ? 1 : 0
-    return Math.max(0, CLASS_NAME_MAX_LENGTH - prefixLength - subjectLength - subjectSeparator)
-  }
   return Math.max(0, CLASS_NAME_MAX_LENGTH - prefixLength)
 }
 
@@ -79,16 +74,12 @@ export function normalizeAiTitleSuffix(title: string, instructorType: Instructor
 export function normalizeAiTitleTails(
   titles: string[],
   instructorType: InstructorType,
-  subjectName: string | null | undefined,
+  _subjectName?: string | null,
 ): string[] {
   const seen = new Set<string>()
   const result: string[] = []
   for (const title of titles) {
-    const suffix = normalizeAiTitleSuffix(title, instructorType)
-    const tail =
-      instructorType === 'individual' && subjectName?.trim()
-        ? splitSuffixAroundSubject(suffix, subjectName).editableTail
-        : suffix
+    const tail = normalizeAiTitleSuffix(title, instructorType)
     const key = tail.toLowerCase()
     if (!tail || seen.has(key)) continue
     seen.add(key)
@@ -111,10 +102,9 @@ export function buildStoredClassNameFromParts(options: {
   editableTail: string
   academySuffix: string
 }): string {
-  const { instructorType, lockedSubjectName, editableTail, academySuffix } = options
+  const { instructorType, editableTail, academySuffix } = options
   if (isIndividualClassType(instructorType)) {
-    const suffix = buildSuffixFromSubject(lockedSubjectName ?? '', editableTail)
-    return buildClassTitle(suffix, 'individual')
+    return buildClassTitle(editableTail, 'individual')
   }
   return buildClassTitle(academySuffix, 'academy')
 }

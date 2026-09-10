@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -250,7 +251,17 @@ export default function InstructorList() {
 
           return (
           <tr key={item.id}>
-            <td className="px-4 py-3">{displayPersonName(item)}</td>
+            <td className="px-4 py-3">
+              <div className="flex flex-col gap-1">
+                <span>{displayPersonName(item)}</span>
+                <Link
+                  href={`/classes/create/?instructorId=${encodeURIComponent(item.id)}`}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Create class
+                </Link>
+              </div>
+            </td>
             <td className="px-4 py-3">
               <InstructorTypeToggle
                 value={instructorType}

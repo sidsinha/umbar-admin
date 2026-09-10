@@ -2,6 +2,7 @@ import type {
   AdminClass,
   AdminClassDetailResponse,
   AdminClassUpdateBody,
+  AdminInstructorClassCreateContextResponse,
   AdminInquiry,
   AdminInstructor,
   AdminInstructorDashboardUsageResponse,
@@ -122,6 +123,26 @@ export async function setAdminClassMarketplaceVisibility(
     { enabled },
   )
   return payload as unknown as { success: true; class: { id: string; status: string } }
+}
+
+export async function fetchAdminInstructorClassCreateContext(
+  instructorId: string,
+): Promise<AdminInstructorClassCreateContextResponse> {
+  const payload = await fetchAdminApiGet(
+    `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}/class-create-context`,
+  )
+  return payload as unknown as AdminInstructorClassCreateContextResponse
+}
+
+export async function createAdminClass(
+  instructorId: string,
+  body: AdminClassUpdateBody,
+): Promise<{ success: true; class: { id: string } }> {
+  const payload = await fetchAdminApiPost(
+    `${ADMIN_OPS_ROOT}/instructors/${encodeURIComponent(instructorId)}/classes/create`,
+    body as unknown as Record<string, unknown>,
+  )
+  return payload as unknown as { success: true; class: { id: string } }
 }
 
 export async function fetchAdminClass(classId: string): Promise<AdminClassDetailResponse> {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
 import { getTagCategory, getTagDisplayName, TAG_COLORS } from '@/components/classes/class-tags'
 import type { ClassTagGroup } from '@/lib/marketplace-api-client'
@@ -10,7 +10,6 @@ type ClassTagSelectorProps = {
   selectedTags: string[]
   onTagsChange: (tags: string[]) => void
   tagGroups: ClassTagGroup[]
-  categoryId?: string
   maxTags?: number
 }
 
@@ -18,25 +17,14 @@ export default function ClassTagSelector({
   selectedTags,
   onTagsChange,
   tagGroups,
-  categoryId,
   maxTags = 10,
 }: ClassTagSelectorProps) {
-  const visibleGroups = useMemo(
-    () =>
-      categoryId === undefined
-        ? tagGroups
-        : tagGroups.filter(
-            (group) => !group.visibleForCategoryIds || group.visibleForCategoryIds.includes(categoryId),
-          ),
-    [tagGroups, categoryId],
-  )
-
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const resolvedActiveCategory =
-    activeCategory && visibleGroups.some((g) => g.id === activeCategory)
+    activeCategory && tagGroups.some((g) => g.id === activeCategory)
       ? activeCategory
-      : visibleGroups[0]?.id || null
-  const activeGroup = visibleGroups.find((g) => g.id === resolvedActiveCategory) || null
+      : tagGroups[0]?.id || null
+  const activeGroup = tagGroups.find((g) => g.id === resolvedActiveCategory) || null
 
   function handleTagToggle(tag: string, groupId: string) {
     const tagKey = `${groupId}:${tag}`
@@ -86,10 +74,10 @@ export default function ClassTagSelector({
         </div>
       ) : null}
 
-      {visibleGroups.length > 0 ? (
+      {tagGroups.length > 0 ? (
         <>
           <div className="flex flex-wrap gap-2 border-b border-border pb-2">
-            {visibleGroups.map((group) => (
+            {tagGroups.map((group) => (
               <button
                 key={group.id}
                 type="button"

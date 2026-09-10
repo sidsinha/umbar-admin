@@ -80,7 +80,7 @@ export type AdminClass = {
   status: string
   currentEnrollments: number
   gaPageViewCount: number
-  createdFrom: 'website' | 'app' | null
+  createdFrom: 'website' | 'app' | 'admin' | null
   createdAt: string
   updatedAt: string
 }
@@ -134,6 +134,15 @@ export type AdminClassDetailResponse = {
   /** The instructor's account type — may be "both", in which case each class picks its own type. */
   instructorType: 'individual' | 'academy' | 'both'
   organizationName: string | null
+}
+
+export type AdminInstructorClassCreateContextResponse = {
+  success: true
+  instructorName: string | null
+  instructorEmail: string | null
+  instructorType: 'individual' | 'academy' | 'both'
+  organizationName: string | null
+  location: ClassLocation | null
 }
 
 export type AdminClassUpdateBody = {

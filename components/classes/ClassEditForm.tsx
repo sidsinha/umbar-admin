@@ -20,7 +20,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { CLASS_LOGO_TOO_LARGE_MESSAGE, isClassLogoTooLarge } from '@/lib/class-logo'
 import {
   buildStoredClassNameFromParts,
-  buildSuffixFromSubject,
   CLASS_NAME_MAX_LENGTH,
   classNameCharCountLabel,
   classNameLengthError,
@@ -29,9 +28,13 @@ import {
   normalizeAiTitleTails,
   primarySubjectName,
   splitClassTitle,
-  splitSuffixAroundSubject,
 } from '@/lib/class-title'
-import { fetchAdminClass, updateAdminClass } from '@/lib/admin-ops-api-client'
+import {
+  createAdminClass,
+  fetchAdminClass,
+  fetchAdminInstructorClassCreateContext,
+  updateAdminClass,
+} from '@/lib/admin-ops-api-client'
 import type { AdminClassDetail, AdminClassUpdateBody, ClassDefaultFee, ClassLocation } from '@/lib/admin-types'
 import { generateAdminClassContent } from '@/lib/generate-class-content'
 import { useClassAIGenerator } from '@/lib/hooks/use-class-ai-generator'
@@ -49,7 +52,8 @@ type ClassTypeOption = 'in-person' | 'remote' | 'both'
 type ClassFormStatus = 'active' | 'disabled'
 
 type ClassEditFormProps = {
-  classId: string
+  classId?: string
+  instructorId?: string
 }
 
 function normalizeClassType(value: string | undefined): ClassTypeOption {
@@ -99,9 +103,11 @@ function detailToFormState(detail: AdminClassDetail) {
   }
 }
 
-export default function ClassEditForm({ classId }: ClassEditFormProps) {
+export default function ClassEditForm({ classId, instructorId }: ClassEditFormProps) {
   const router = useRouter()
   const queryClient = useQueryClient()
+  const isCreateMode = Boolean(instructorId) && !classId
+  const formEnabled = Boolean(classId) || isCreateMode
 
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<string | null>(null)
@@ -143,22 +149,33 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
     enabled: Boolean(classId),
   })
 
+  const contextQuery = useQuery({
+    queryKey: ['admin-instructor-class-create-context', instructorId],
+    queryFn: () => fetchAdminInstructorClassCreateContext(instructorId!),
+    enabled: isCreateMode,
+  })
+
   const categoriesQuery = useQuery({
     queryKey: ['marketplace-categories', 'v2', 'all'],
     queryFn: fetchCategories,
-    enabled: Boolean(classId),
+    enabled: formEnabled,
   })
 
   const countriesQuery = useQuery({
-    queryKey: ['marketplace-countries'],
-    queryFn: () => fetchSupportedCountries({ marketplaceOnly: true }),
-    enabled: Boolean(classId),
+    queryKey: ['marketplace-countries', 'all'],
+    queryFn: () => fetchSupportedCountries({ marketplaceOnly: false }),
+    enabled: formEnabled,
   })
 
+  const tagParentCategoryIds = useMemo(
+    () => (categoryId ? [categoryId] : undefined),
+    [categoryId],
+  )
+
   const classTagsQuery = useQuery({
-    queryKey: ['marketplace-class-tags'],
-    queryFn: fetchClassTags,
-    enabled: Boolean(classId),
+    queryKey: ['marketplace-class-tags', tagParentCategoryIds?.join(',') ?? 'all'],
+    queryFn: () => fetchClassTags({ parentCategoryIds: tagParentCategoryIds }),
+    enabled: formEnabled,
   })
 
   const isV2 = categoriesQuery.data ? isV2CategoriesResponse(categoriesQuery.data) : false
@@ -178,7 +195,8 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
     return first?.placesIso2 || 'IN'
   }, [countriesQuery.data, country])
 
-  const instructorAccountType = detailQuery.data?.instructorType ?? 'individual'
+  const instructorAccountType =
+    detailQuery.data?.instructorType ?? contextQuery.data?.instructorType ?? 'individual'
   const resolvedOfferingType: InstructorType = classInstructorType
 
   const lockedSubject = useMemo(() => {
@@ -239,13 +257,7 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
       setTitleSuffix(suffix)
       setTitleEditableTail('')
     } else {
-      const subject =
-        isV2 && next.subcategoryId ? primarySubjectName(v2Categories, next.subcategoryId) : null
-      if (subject) {
-        setTitleEditableTail(splitSuffixAroundSubject(suffix, subject).editableTail)
-      } else {
-        setTitleEditableTail(suffix)
-      }
+      setTitleEditableTail(suffix)
       setTitleSuffix('')
     }
 
@@ -280,18 +292,40 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
   }, [detailQuery.data, v2Categories, isV2, categoriesQuery.isLoading])
 
   useEffect(() => {
+    if (!isCreateMode || !contextQuery.data) return
+    const context = contextQuery.data
+    setOrganizationName(context.organizationName ?? '')
+    setClassInstructorType(context.instructorType === 'academy' ? 'academy' : 'individual')
+    const instructorCountry = context.location?.country
+    if (typeof instructorCountry === 'string' && instructorCountry.trim()) {
+      setCountry(instructorCountry.trim())
+    }
+    setFormError(null)
+    setFieldError(null)
+  }, [isCreateMode, contextQuery.data])
+
+  useEffect(() => {
     if (country || !countriesQuery.data?.length) return
     setCountry(countriesQuery.data[0].name)
   }, [country, countriesQuery.data])
 
   const saveMutation = useMutation({
-    mutationFn: (body: AdminClassUpdateBody) => updateAdminClass(classId!, body),
-    onSuccess: async () => {
+    mutationFn: async (body: AdminClassUpdateBody) => {
+      if (isCreateMode && instructorId) {
+        return createAdminClass(instructorId, body)
+      }
+      return updateAdminClass(classId!, body)
+    },
+    onSuccess: async (result) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['admin-classes'] }),
         queryClient.invalidateQueries({ queryKey: ['admin-stats'] }),
-        queryClient.invalidateQueries({ queryKey: ['admin-class-detail', classId] }),
       ])
+      if (isCreateMode && result.class?.id) {
+        router.push(`/classes/edit/?id=${encodeURIComponent(result.class.id)}`)
+        return
+      }
+      await queryClient.invalidateQueries({ queryKey: ['admin-class-detail', classId] })
       router.push('/classes/')
     },
     onError: (error) => {
@@ -307,15 +341,13 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
     if (nextType === classInstructorType) return
 
     if (nextType === 'academy') {
-      const migratedSuffix = buildSuffixFromSubject(lockedSubject ?? '', titleEditableTail).trim()
+      const migratedSuffix = titleEditableTail.trim() || titleSuffix.trim()
       if (migratedSuffix) {
         setTitleSuffix(migratedSuffix)
       }
       setTitleEditableTail('')
     } else {
-      const migratedTail = lockedSubject
-        ? splitSuffixAroundSubject(titleSuffix, lockedSubject).editableTail
-        : titleSuffix.trim()
+      const migratedTail = titleSuffix.trim() || titleEditableTail.trim()
       if (migratedTail) {
         setTitleEditableTail(migratedTail)
       }
@@ -493,7 +525,7 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
       body.category = category.trim()
     }
 
-    if (logoChanged) {
+    if (logoChanged || isCreateMode) {
       body.classLogo = classLogo
     }
 
@@ -506,27 +538,35 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
     saveMutation.mutate(body)
   }
 
-  const instructorName = detailQuery.data?.instructorName?.trim() || ''
+  const instructorName =
+    detailQuery.data?.instructorName?.trim() || contextQuery.data?.instructorName?.trim() || ''
 
   const offeringDiffersFromAccount =
     instructorAccountType !== 'both' && instructorAccountType !== resolvedOfferingType
 
-  const loading = detailQuery.isLoading || categoriesQuery.isLoading
+  const loading = isCreateMode
+    ? contextQuery.isLoading || categoriesQuery.isLoading
+    : detailQuery.isLoading || categoriesQuery.isLoading
+
+  const loadError = isCreateMode ? contextQuery.error : detailQuery.error
+  const backHref = isCreateMode ? '/instructors/' : '/classes/'
 
   return (
     <div className="mx-auto max-w-3xl">
       <Link
-        href="/classes/"
+        href={backHref}
         className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to classes
+        {isCreateMode ? 'Back to instructors' : 'Back to classes'}
       </Link>
 
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-foreground">Edit class</h2>
-          {detailQuery.data?.class?.name ? (
+          <h2 className="text-2xl font-semibold text-foreground">
+            {isCreateMode ? `Create class for ${instructorName || 'instructor'}` : 'Edit class'}
+          </h2>
+          {!isCreateMode && detailQuery.data?.class?.name ? (
             <p className="mt-1 text-sm text-muted-foreground">{detailQuery.data.class.name}</p>
           ) : null}
         </div>
@@ -535,16 +575,16 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
             type="button"
             variant="outline"
             disabled={saveMutation.isPending}
-            onClick={() => router.push('/classes/')}
+            onClick={() => router.push(backHref)}
           >
             Cancel
           </Button>
           <Button
             type="button"
             onClick={handleSave}
-            disabled={loading || detailQuery.isError || saveMutation.isPending}
+            disabled={loading || Boolean(loadError) || saveMutation.isPending}
           >
-            {saveMutation.isPending ? 'Saving…' : 'Save'}
+            {saveMutation.isPending ? 'Saving…' : isCreateMode ? 'Create class' : 'Save'}
           </Button>
         </div>
       </div>
@@ -553,9 +593,9 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
-      ) : detailQuery.error ? (
+      ) : loadError ? (
         <p className="text-destructive">
-          {detailQuery.error instanceof Error ? detailQuery.error.message : 'Failed to load class.'}
+          {loadError instanceof Error ? loadError.message : 'Failed to load class.'}
         </p>
       ) : (
         <div className="space-y-8 pb-8">
@@ -619,15 +659,37 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
               </div>
             ) : null}
             {classType === 'in-person' || classType === 'both' ? (
-              <ClassLocationField
-                countryIso={countryIso}
-                locationText={locationText}
-                lat={lat}
-                lng={lng}
-                onLocationTextChange={setLocationText}
-                onResolved={handleResolvedLocation}
-                onClearResolved={clearResolvedLocation}
-              />
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="class-country">Country</Label>
+                  <select
+                    id="class-country"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={country}
+                    onChange={(event) => {
+                      setCountry(event.target.value)
+                      clearResolvedLocation()
+                    }}
+                    disabled={countriesQuery.isLoading || !countriesQuery.data?.length}
+                  >
+                    <option value="">Select country</option>
+                    {(countriesQuery.data ?? []).map((item) => (
+                      <option key={item.id} value={item.name}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <ClassLocationField
+                  countryIso={countryIso}
+                  locationText={locationText}
+                  lat={lat}
+                  lng={lng}
+                  onLocationTextChange={setLocationText}
+                  onResolved={handleResolvedLocation}
+                  onClearResolved={clearResolvedLocation}
+                />
+              </>
             ) : null}
           </section>
 
@@ -723,12 +785,11 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
               <PrefixedClassTitleInput
                 id="class-name"
                 instructorType={resolvedOfferingType}
-                lockedSubjectName={lockedSubject}
                 editableTail={titleEditableTail}
                 onEditableTailChange={setTitleEditableTail}
                 academySuffix={titleSuffix}
                 onAcademySuffixChange={setTitleSuffix}
-                maxLength={maxEditableTitleTailLength(resolvedOfferingType, lockedSubject)}
+                maxLength={maxEditableTitleTailLength(resolvedOfferingType)}
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <p
@@ -861,7 +922,6 @@ export default function ClassEditForm({ classId }: ClassEditFormProps) {
               selectedTags={tags}
               onTagsChange={setTags}
               tagGroups={classTagsQuery.data || []}
-              categoryId={categoryId || undefined}
             />
           </section>
         </div>
