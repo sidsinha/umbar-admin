@@ -2,8 +2,8 @@ import type { InstructorType } from '@/lib/instructor-type'
 import { isIndividualClassType } from '@/lib/instructor-type'
 
 export const CLASS_TITLE_PREFIXES: Record<InstructorType, string> = {
-  individual: 'I will teach ',
-  academy: 'We will teach ',
+  individual: 'I teach ',
+  academy: 'We teach ',
 }
 
 /** Matches API `sanitizeText(body.name, 200)` in umbar-api class writes. */
