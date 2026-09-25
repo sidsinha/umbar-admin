@@ -239,6 +239,7 @@ export type AdminStats = {
   classes: { total: number; active: number; completed: number; archived: number }
   students: { total: number; active: number; inactive: number }
   inquiries: { total: number; last7Days: number }
+  callbackRequests: { total: number; last7Days: number }
   registrationTrends: AdminRegistrationTrends
   dashboardUsage: {
     activeInstructors7d: number

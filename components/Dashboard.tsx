@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
@@ -11,6 +12,7 @@ import {
   Users,
 } from 'lucide-react'
 
+import DashboardRegistrationChart from '@/components/DashboardRegistrationChart'
 import { Button } from '@/components/ui/button'
 import { fetchAdminStats } from '@/lib/admin-ops-api-client'
 import type { AdminStats } from '@/lib/admin-types'
@@ -79,8 +81,12 @@ const CARDS: StatsCard[] = [
     href: '/inquiries/',
     icon: MessageSquare,
     iconClassName: 'bg-primary/8 text-primary',
-    total: (stats) => stats.inquiries.total,
-    metrics: (stats) => [{ label: 'in the last 7 days', value: stats.inquiries.last7Days }],
+    total: (stats) =>
+      (stats.callbackRequests?.total ?? 0) + stats.inquiries.total,
+    metrics: (stats) => [
+      { label: 'callbacks (7d)', value: stats.callbackRequests?.last7Days ?? 0 },
+      { label: 'class enquiries (7d)', value: stats.inquiries.last7Days },
+    ],
   },
   {
     key: 'instructor-dashboard',
@@ -158,6 +164,68 @@ function StatCard({
         />
       </p>
     </Link>
+  )
+}
+
+const TREND_DAY_OPTIONS = [7, 30, 90] as const
+
+function RegistrationTrendsSection({
+  stats,
+  trendDays,
+  onTrendDaysChange,
+  isFetching,
+}: {
+  stats: AdminStats
+  trendDays: number
+  onTrendDaysChange: (days: number) => void
+  isFetching: boolean
+}) {
+  const trends = stats.registrationTrends
+
+  return (
+    <section className="mt-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">Registrations</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            New sign-ups per day (UTC)
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Period</span>
+          <select
+            value={trendDays}
+            onChange={(event) => onTrendDaysChange(Number(event.target.value))}
+            disabled={isFetching}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+          >
+            {TREND_DAY_OPTIONS.map((days) => (
+              <option key={days} value={days}>
+                Last {days} days
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <DashboardRegistrationChart
+          title="Instructors"
+          data={trends?.instructors ?? []}
+          color="#2d3748"
+        />
+        <DashboardRegistrationChart
+          title="Classes"
+          data={trends?.classes ?? []}
+          color="#d4a853"
+        />
+        <DashboardRegistrationChart
+          title="Students"
+          data={trends?.students ?? []}
+          color="#64748b"
+        />
+      </div>
+    </section>
   )
 }
 
@@ -423,9 +491,11 @@ function DashboardUsageSummary({ stats }: { stats: AdminStats }) {
 }
 
 export default function Dashboard() {
+  const [trendDays, setTrendDays] = useState(30)
+
   const statsQuery = useQuery({
-    queryKey: ['admin-stats'],
-    queryFn: fetchAdminStats,
+    queryKey: ['admin-stats', trendDays],
+    queryFn: () => fetchAdminStats({ days: trendDays }),
   })
 
   const skeletonCount = CARDS.length
@@ -479,6 +549,13 @@ export default function Dashboard() {
               />
             ))}
           </div>
+
+          <RegistrationTrendsSection
+            stats={statsQuery.data.stats}
+            trendDays={trendDays}
+            onTrendDaysChange={setTrendDays}
+            isFetching={statsQuery.isFetching}
+          />
 
           <DashboardUsageSummary stats={statsQuery.data.stats} />
         </>

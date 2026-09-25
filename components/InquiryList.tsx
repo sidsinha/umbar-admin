@@ -14,12 +14,12 @@ import { cn, formatDate } from '@/utils'
 type LeadTab = 'inquiries' | 'callbacks'
 
 const TABS: { id: LeadTab; label: string }[] = [
-  { id: 'inquiries', label: 'Class enquiries' },
   { id: 'callbacks', label: 'Request a callback' },
+  { id: 'inquiries', label: 'Class enquiries' },
 ]
 
 export default function InquiryList() {
-  const [activeTab, setActiveTab] = useState<LeadTab>('inquiries')
+  const [activeTab, setActiveTab] = useState<LeadTab>('callbacks')
   const [classFilter, setClassFilter] = useState('')
   const [appliedClassId, setAppliedClassId] = useState('')
   const { limit, setLimit, currentCursor, resetPaging, goNext, goPrev, hasPrev } =
