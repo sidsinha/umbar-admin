@@ -21,6 +21,7 @@ export type AdminInstructor = {
   isActive: boolean
   activeClasses: number
   activeClassSubjects: string[]
+  location: ClassLocation | null
   signupGeo: Record<string, unknown> | null
   signupSource: Record<string, unknown> | null
   dashboardPageViews30d: number
@@ -210,11 +211,35 @@ export type AdminInquiry = {
   createdAt: string
 }
 
+export type AdminCallbackRequest = {
+  id: string
+  leadName: string | null
+  className: string | null
+  classId: string | null
+  phone: string | null
+  messagePreview: string | null
+  status: string | null
+  createdAt: string
+}
+
+export type DailyRegistrationCount = {
+  date: string
+  count: number
+}
+
+export type AdminRegistrationTrends = {
+  days: number
+  instructors: DailyRegistrationCount[]
+  classes: DailyRegistrationCount[]
+  students: DailyRegistrationCount[]
+}
+
 export type AdminStats = {
   instructors: { total: number; active: number; inactive: number }
   classes: { total: number; active: number; completed: number; archived: number }
   students: { total: number; active: number; inactive: number }
   inquiries: { total: number; last7Days: number }
+  registrationTrends: AdminRegistrationTrends
   dashboardUsage: {
     activeInstructors7d: number
     pageViews7d: number

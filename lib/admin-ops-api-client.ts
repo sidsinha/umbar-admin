@@ -3,6 +3,7 @@ import type {
   AdminClassDetailResponse,
   AdminClassUpdateBody,
   AdminInstructorClassCreateContextResponse,
+  AdminCallbackRequest,
   AdminInquiry,
   AdminInstructor,
   AdminInstructorDashboardUsageResponse,
@@ -48,8 +49,9 @@ function buildQuery(params: ListQueryParams): string {
   return query ? `?${query}` : ''
 }
 
-export async function fetchAdminStats(): Promise<AdminStatsResponse> {
-  const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/stats`)
+export async function fetchAdminStats(options?: { days?: number }): Promise<AdminStatsResponse> {
+  const days = options?.days ?? 30
+  const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/stats?days=${days}`)
   return payload as unknown as AdminStatsResponse
 }
 
@@ -196,4 +198,11 @@ export async function fetchAdminInquiries(
 ): Promise<AdminListResult<AdminInquiry>> {
   const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/inquiries${buildQuery(params)}`)
   return payload as unknown as AdminListResult<AdminInquiry>
+}
+
+export async function fetchAdminCallbackRequests(
+  params: ListQueryParams = {},
+): Promise<AdminListResult<AdminCallbackRequest>> {
+  const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/callback-requests${buildQuery(params)}`)
+  return payload as unknown as AdminListResult<AdminCallbackRequest>
 }
