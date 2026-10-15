@@ -78,6 +78,11 @@ function detailToFormState(detail: AdminClassDetail) {
     category: typeof detail.category === 'string' ? detail.category.trim() : '',
     categoryId: detail.categoryId || '',
     subcategoryId: detail.subcategoryId || '',
+    subcategoryIds: Array.isArray(detail.subcategoryIds)
+      ? detail.subcategoryIds.filter((id) => typeof id === 'string' && id.trim())
+      : detail.subcategoryId
+        ? [detail.subcategoryId]
+        : [],
     instructorType:
       detail.instructorType === 'academy' ? ('academy' as InstructorType) : ('individual' as InstructorType),
     tags: Array.isArray(detail.tags)
@@ -126,6 +131,7 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
   const [category, setCategory] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [subcategoryId, setSubcategoryId] = useState('')
+  const [subcategoryIds, setSubcategoryIds] = useState<string[]>([])
   const [classInstructorType, setClassInstructorType] = useState<InstructorType>('individual')
   const [tags, setTags] = useState<string[]>([])
   const [locationText, setLocationText] = useState('')
@@ -208,9 +214,13 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
   const selectedParent = v2Categories.find((item) => item.id === categoryId) ?? null
   const subcategoryOptions: MarketplaceCategoryV2Child[] = isV2 ? selectedParent?.children ?? [] : []
 
-  const aiReady =
-    Boolean(resolvedOfferingType) &&
-    (isV2 ? Boolean(categoryId && subcategoryId) : Boolean(category.trim()))
+  const hasSubjectSelection = isV2
+    ? isIndividualClassType(resolvedOfferingType)
+      ? Boolean(categoryId && subcategoryId)
+      : Boolean(categoryId && subcategoryIds.length > 0)
+    : Boolean(category.trim())
+
+  const aiReady = Boolean(resolvedOfferingType) && hasSubjectSelection
 
   const fullClassName = useMemo(
     () =>
@@ -273,6 +283,7 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
     setCategory(next.category)
     setCategoryId(next.categoryId)
     setSubcategoryId(next.subcategoryId)
+    setSubcategoryIds(next.subcategoryIds)
     setClassInstructorType(next.instructorType)
     setTags(next.tags)
     setLocationText(next.locationText)
@@ -352,6 +363,16 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
         setTitleEditableTail(migratedTail)
       }
       setTitleSuffix('')
+    }
+
+    if (nextType === 'academy') {
+      if (subcategoryId) {
+        setSubcategoryIds([subcategoryId])
+      }
+    } else {
+      const primary = subcategoryIds[0] || subcategoryId
+      setSubcategoryId(primary || '')
+      setSubcategoryIds([])
     }
 
     setClassInstructorType(nextType)
@@ -441,8 +462,17 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
     }
 
     if (isV2) {
-      if (!categoryId || !subcategoryId) {
-        setFormError('Category and subcategory are required.')
+      if (!categoryId) {
+        setFormError('Category is required.')
+        return null
+      }
+      if (isIndividualClassType(resolvedOfferingType)) {
+        if (!subcategoryId) {
+          setFormError('Subcategory is required.')
+          return null
+        }
+      } else if (subcategoryIds.length === 0) {
+        setFormError('Select at least one subject.')
         return null
       }
     } else if (!category.trim()) {
@@ -450,11 +480,11 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
       return null
     }
 
-    if (
-      (classType === 'in-person' || classType === 'both') &&
-      locationText.trim() &&
-      (lat == null || lng == null)
-    ) {
+    if (!locationText.trim()) {
+      setFormError('Location is required.')
+      return null
+    }
+    if (lat == null || lng == null) {
       setFormError('Please select a valid location suggestion from search results.')
       return null
     }
@@ -485,21 +515,18 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
     }
 
     const normalizedAreaLabel = normalizeLocationAreaLabel(locality || city)
-    const location: ClassLocation | null =
-      (classType === 'in-person' || classType === 'both') && locationText.trim()
-        ? {
-            city: city.trim() || null,
-            state: state.trim() || null,
-            country: country.trim() || null,
-            areaLabel: normalizedAreaLabel || null,
-            placeId: placeId || null,
-            locationText: locationText.trim() || null,
-            formattedAddress: formattedAddress.trim() || null,
-            locality: locality.trim() || null,
-            lat,
-            lng,
-          }
-        : null
+    const location: ClassLocation = {
+      city: city.trim() || null,
+      state: state.trim() || null,
+      country: country.trim() || null,
+      areaLabel: normalizedAreaLabel || null,
+      placeId: placeId || null,
+      locationText: locationText.trim() || null,
+      formattedAddress: formattedAddress.trim() || null,
+      locality: locality.trim() || null,
+      lat,
+      lng,
+    }
 
     const body: AdminClassUpdateBody = {
       name: storedName.trim(),
@@ -520,7 +547,15 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
 
     if (isV2) {
       body.categoryId = categoryId
-      body.subcategoryId = subcategoryId
+      if (isIndividualClassType(resolvedOfferingType)) {
+        body.subcategoryId = subcategoryId
+      } else {
+        const ids = [...new Set(subcategoryIds.map((id) => id.trim()).filter(Boolean))]
+        body.subcategoryId = ids[0]
+        if (ids.length > 1) {
+          body.subcategoryIds = ids
+        }
+      }
     } else {
       body.category = category.trim()
     }
@@ -658,39 +693,35 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
                 />
               </div>
             ) : null}
-            {classType === 'in-person' || classType === 'both' ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="class-country">Country</Label>
-                  <select
-                    id="class-country"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    value={country}
-                    onChange={(event) => {
-                      setCountry(event.target.value)
-                      clearResolvedLocation()
-                    }}
-                    disabled={countriesQuery.isLoading || !countriesQuery.data?.length}
-                  >
-                    <option value="">Select country</option>
-                    {(countriesQuery.data ?? []).map((item) => (
-                      <option key={item.id} value={item.name}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <ClassLocationField
-                  countryIso={countryIso}
-                  locationText={locationText}
-                  lat={lat}
-                  lng={lng}
-                  onLocationTextChange={setLocationText}
-                  onResolved={handleResolvedLocation}
-                  onClearResolved={clearResolvedLocation}
-                />
-              </>
-            ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="class-country">Country</Label>
+              <select
+                id="class-country"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={country}
+                onChange={(event) => {
+                  setCountry(event.target.value)
+                  clearResolvedLocation()
+                }}
+                disabled={countriesQuery.isLoading || !countriesQuery.data?.length}
+              >
+                <option value="">Select country</option>
+                {(countriesQuery.data ?? []).map((item) => (
+                  <option key={item.id} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <ClassLocationField
+              countryIso={countryIso}
+              locationText={locationText}
+              lat={lat}
+              lng={lng}
+              onLocationTextChange={setLocationText}
+              onResolved={handleResolvedLocation}
+              onClearResolved={clearResolvedLocation}
+            />
           </section>
 
           <section className="space-y-4">
@@ -707,6 +738,7 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
                       onChange={(event) => {
                         setCategoryId(event.target.value)
                         setSubcategoryId('')
+                        setSubcategoryIds([])
                       }}
                     >
                       <option value="">Select category</option>
@@ -718,22 +750,69 @@ export default function ClassEditForm({ classId, instructorId }: ClassEditFormPr
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="category-child">Subcategory</Label>
-                    <select
-                      id="category-child"
-                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      value={subcategoryId}
-                      onChange={(event) => setSubcategoryId(event.target.value)}
-                      disabled={!categoryId}
-                    >
-                      <option value="">Select subcategory</option>
-                      {subcategoryOptions.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
-                </div>
+                    <Label>
+                      {isIndividualClassType(resolvedOfferingType) ? 'Subcategory' : 'Subjects'}
+                    </Label>
+                    {isIndividualClassType(resolvedOfferingType) ? (
+                      <select
+                        id="category-child"
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        value={subcategoryId}
+                        onChange={(event) => setSubcategoryId(event.target.value)}
+                        disabled={!categoryId}
+                      >
+                        <option value="">Select subcategory</option>
+                        {subcategoryOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div
+                        className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-input bg-background p-3"
+                        role="group"
+                        aria-labelledby="category-child"
+                      >
+                        {!categoryId ? (
+                          <p className="text-sm text-muted-foreground">Select a category first.</p>
+                        ) : subcategoryOptions.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No subjects in this category.</p>
+                        ) : (
+                          subcategoryOptions.map((item) => {
+                            const checked = subcategoryIds.includes(item.id)
+                            return (
+                              <label
+                                key={item.id}
+                                className="flex cursor-pointer items-center gap-2 text-sm"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="h-4 w-4 rounded border-input"
+                                  checked={checked}
+                                  disabled={!categoryId}
+                                  onChange={(event) => {
+                                    setSubcategoryIds((current) => {
+                                      if (event.target.checked) {
+                                        return [...new Set([...current, item.id])]
+                                      }
+                                      return current.filter((id) => id !== item.id)
+                                    })
+                                  }}
+                                />
+                                <span>{item.name}</span>
+                              </label>
+                            )
+                          })
+                        )}
+                      </div>
+                    )}
+                    {!isIndividualClassType(resolvedOfferingType) && subcategoryIds.length > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {subcategoryIds.length} subject{subcategoryIds.length === 1 ? '' : 's'} selected
+                      </p>
+                    ) : null}
+                  </div>
               </div>
             ) : (
               <div className="space-y-2">

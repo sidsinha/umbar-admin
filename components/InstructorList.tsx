@@ -27,9 +27,9 @@ import {
   cn,
   displayPersonName,
   formatDate,
-  formatSignupGeo,
+  formatInstructorLocation,
   formatSignupSource,
-  statusPillClass,
+  formatSignupSourcePlatform,
 } from '@/utils'
 
 function ImpactRow({
@@ -232,16 +232,17 @@ export default function InstructorList() {
         columns={[
           'Name',
           'Type',
+          'Email',
           'Phone',
-          'Source',
-          'Signup location',
-          'Gender',
-          'Status',
+          'Home tuition',
+          'Platform',
+          'Location',
           'Active classes',
           'Dashboard views',
           'Last active',
           'Subjects',
           'Created',
+          'Source',
           'Actions',
         ]}
       >
@@ -269,15 +270,11 @@ export default function InstructorList() {
                 onChange={(next) => handleInstructorTypeChange(item, next)}
               />
             </td>
+            <td className="px-4 py-3">{item.email ?? '—'}</td>
             <td className="px-4 py-3">{item.phoneNumber ?? '—'}</td>
-            <td className="px-4 py-3">{formatSignupSource(item.signupSource)}</td>
-            <td className="px-4 py-3">{formatSignupGeo(item.signupGeo)}</td>
-            <td className="px-4 py-3 capitalize">{item.gender ?? '—'}</td>
-            <td className="px-4 py-3">
-              <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusPillClass(item.isActive)}`}>
-                {item.isActive ? 'Active' : 'Inactive'}
-              </span>
-            </td>
+            <td className="px-4 py-3">{item.offersHomeTuition ? 'Yes' : 'No'}</td>
+            <td className="px-4 py-3">{formatSignupSourcePlatform(item.signupSource)}</td>
+            <td className="px-4 py-3">{formatInstructorLocation(item.location, item.signupGeo)}</td>
             <td className="px-4 py-3">{item.activeClasses}</td>
             <td className="px-4 py-3" title="GA4 dashboard_page_view events (last 30 days)">
               {(item.dashboardPageViews30d ?? 0).toLocaleString()}
@@ -289,6 +286,7 @@ export default function InstructorList() {
               {item.activeClassSubjects?.length ? item.activeClassSubjects.join(', ') : '—'}
             </td>
             <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
+            <td className="px-4 py-3">{formatSignupSource(item.signupSource)}</td>
             <td className="px-4 py-3">
               <div className="flex flex-wrap gap-2">
                 <Button

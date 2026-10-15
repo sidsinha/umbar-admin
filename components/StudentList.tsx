@@ -15,7 +15,17 @@ import {
 } from '@/lib/admin-ops-api-client'
 import type { AdminStudent, AdminStudentDeleteImpactResponse } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
-import { cn, displayPersonName, formatDate, statusPillClass } from '@/utils'
+import {
+  cn,
+  displayPersonName,
+  formatDate,
+  formatProfileLocation,
+  formatSignupSource,
+  formatSignupSourcePlatform,
+  formatStudentClaimStatus,
+  statusPillClass,
+  studentClaimStatusPillClass,
+} from '@/utils'
 
 function ImpactRow({
   label,
@@ -135,13 +145,42 @@ export default function StudentList() {
       ) : null}
 
       <DataTable
-        columns={['Name', 'Phone', 'Gender', 'Status', 'Enrollments', 'Created', 'Actions']}
+        columns={[
+          'Name',
+          'Phone',
+          'Source',
+          'Platform',
+          'Location',
+          'Subjects',
+          'Claim status',
+          'Status',
+          'Enrollments',
+          'Created',
+          'Actions',
+        ]}
       >
         {items.map((item) => (
           <tr key={item.id}>
             <td className="px-4 py-3">{displayPersonName(item)}</td>
             <td className="px-4 py-3">{item.phoneNumber ?? '—'}</td>
-            <td className="px-4 py-3 capitalize">{item.gender ?? '—'}</td>
+            <td className="px-4 py-3">{formatSignupSource(item.signupSource)}</td>
+            <td className="px-4 py-3">{formatSignupSourcePlatform(item.signupSource)}</td>
+            <td className="max-w-xs truncate px-4 py-3">
+              {formatProfileLocation(item.location)}
+            </td>
+            <td className="max-w-xs truncate px-4 py-3">
+              {item.interestSubjects?.length ? item.interestSubjects.join(', ') : '—'}
+            </td>
+            <td className="px-4 py-3">
+              <span
+                className={cn(
+                  'rounded-full px-2 py-1 text-xs font-medium capitalize',
+                  studentClaimStatusPillClass(item.claimStatus),
+                )}
+              >
+                {formatStudentClaimStatus(item.claimStatus)}
+              </span>
+            </td>
             <td className="px-4 py-3">
               <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusPillClass(item.isActive)}`}>
                 {item.isActive ? 'Active' : 'Inactive'}

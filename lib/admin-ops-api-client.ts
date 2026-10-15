@@ -5,6 +5,7 @@ import type {
   AdminInstructorClassCreateContextResponse,
   AdminCallbackRequest,
   AdminInquiry,
+  AdminInquiryConversationResponse,
   AdminInstructor,
   AdminInstructorDashboardUsageResponse,
   AdminInstructorDeleteImpactResponse,
@@ -200,9 +201,34 @@ export async function fetchAdminInquiries(
   return payload as unknown as AdminListResult<AdminInquiry>
 }
 
+export async function fetchAdminInquiryConversation(
+  conversationId: string,
+): Promise<AdminInquiryConversationResponse> {
+  const payload = await fetchAdminApiGet(
+    `${ADMIN_OPS_ROOT}/inquiries/${encodeURIComponent(conversationId)}/messages`,
+  )
+  return payload as unknown as AdminInquiryConversationResponse
+}
+
 export async function fetchAdminCallbackRequests(
   params: ListQueryParams = {},
 ): Promise<AdminListResult<AdminCallbackRequest>> {
   const payload = await fetchAdminApiGet(`${ADMIN_OPS_ROOT}/callback-requests${buildQuery(params)}`)
   return payload as unknown as AdminListResult<AdminCallbackRequest>
+}
+
+export async function deleteAdminInquiry(conversationId: string): Promise<{ success: true; deletedId: string }> {
+  const payload = await fetchAdminApiDelete(
+    `${ADMIN_OPS_ROOT}/inquiries/${encodeURIComponent(conversationId)}`,
+  )
+  return payload as unknown as { success: true; deletedId: string }
+}
+
+export async function deleteAdminCallbackRequest(
+  callbackId: string,
+): Promise<{ success: true; deletedId: string }> {
+  const payload = await fetchAdminApiDelete(
+    `${ADMIN_OPS_ROOT}/callback-requests/${encodeURIComponent(callbackId)}`,
+  )
+  return payload as unknown as { success: true; deletedId: string }
 }

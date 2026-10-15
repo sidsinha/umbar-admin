@@ -4,6 +4,14 @@ export const UMBAR_API_BASE_URL = (
 ).replace(/\/$/, '')
 
 /** Root path for all ops-admin routes on umbar-api. */
+export const UMBAR_WEBSITE_BASE_URL = (
+  process.env.NEXT_PUBLIC_UMBAR_WEBSITE_BASE_URL?.trim() || 'https://umbar.app'
+).replace(/\/$/, '')
+
+export function umbarClassPublicUrl(classId: string): string {
+  return `${UMBAR_WEBSITE_BASE_URL}/class/${encodeURIComponent(classId)}/`
+}
+
 export const ADMIN_OPS_ROOT = '/admin/ops'
 
 export const ADMIN_TOKEN_STORAGE_KEY = 'umbar_ops_admin_token'

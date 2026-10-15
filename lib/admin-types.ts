@@ -18,6 +18,7 @@ export type AdminInstructor = {
   phoneNumber: string | null
   gender: string | null
   instructorType: 'individual' | 'academy'
+  offersHomeTuition: boolean
   isActive: boolean
   activeClasses: number
   activeClassSubjects: string[]
@@ -82,6 +83,7 @@ export type AdminClass = {
   currentEnrollments: number
   gaPageViewCount: number
   createdFrom: 'website' | 'app' | 'admin' | null
+  clientPlatform: 'mobile' | 'desktop' | null
   createdAt: string
   updatedAt: string
 }
@@ -118,6 +120,7 @@ export type AdminClassDetail = {
   category: string | null
   categoryId: string | null
   subcategoryId: string | null
+  subcategoryIds: string[]
   tags: string[]
   status: string
   /** This specific class's individual/academy segment (distinct from the instructor's account type below). */
@@ -158,6 +161,7 @@ export type AdminClassUpdateBody = {
   category?: string
   categoryId?: string
   subcategoryId?: string
+  subcategoryIds?: string[]
   tags: string[]
   status: string
   instructorType?: 'individual' | 'academy'
@@ -172,8 +176,12 @@ export type AdminStudent = {
   email: string | null
   phoneNumber: string | null
   gender: string | null
+  claimStatus: string
   isActive: boolean
   currentEnrollments: number
+  location?: ClassLocation | null
+  signupSource?: Record<string, unknown> | null
+  interestSubjects?: string[]
   createdAt: string
   updatedAt: string
 }
@@ -211,11 +219,36 @@ export type AdminInquiry = {
   createdAt: string
 }
 
+export type AdminInquiryMessage = {
+  id: string
+  senderName: string
+  senderType: 'lead' | 'instructor' | 'student'
+  text: string
+  createdAt: string | null
+}
+
+export type AdminInquiryConversationDetail = {
+  id: string
+  leadName: string | null
+  phone: string | null
+  className: string | null
+  classId: string | null
+  instructorName: string | null
+  createdAt: string
+  messages: AdminInquiryMessage[]
+}
+
+export type AdminInquiryConversationResponse = {
+  success: true
+  conversation: AdminInquiryConversationDetail
+}
+
 export type AdminCallbackRequest = {
   id: string
   leadName: string | null
   className: string | null
   classId: string | null
+  instructorName: string | null
   phone: string | null
   messagePreview: string | null
   status: string | null

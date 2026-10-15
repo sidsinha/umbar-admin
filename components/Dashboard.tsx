@@ -8,7 +8,7 @@ import {
   BookOpen,
   GraduationCap,
   LayoutDashboard,
-  MessageSquare,
+  Phone,
   Users,
 } from 'lucide-react'
 
@@ -76,16 +76,14 @@ const CARDS: StatsCard[] = [
     ],
   },
   {
-    key: 'inquiries',
-    title: 'Inquiries',
+    key: 'callback-requests',
+    title: 'Request a callback',
     href: '/inquiries/',
-    icon: MessageSquare,
+    icon: Phone,
     iconClassName: 'bg-primary/8 text-primary',
-    total: (stats) =>
-      (stats.callbackRequests?.total ?? 0) + stats.inquiries.total,
+    total: (stats) => stats.callbackRequests?.total ?? 0,
     metrics: (stats) => [
-      { label: 'callbacks (7d)', value: stats.callbackRequests?.last7Days ?? 0 },
-      { label: 'class enquiries (7d)', value: stats.inquiries.last7Days },
+      { label: 'in the last 7 days', value: stats.callbackRequests?.last7Days ?? 0 },
     ],
   },
   {

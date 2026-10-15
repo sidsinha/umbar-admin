@@ -16,7 +16,7 @@ import {
 } from '@/lib/admin-ops-api-client'
 import type { AdminClass } from '@/lib/admin-types'
 import { useCursorPagination } from '@/lib/use-cursor-pagination'
-import { cn, formatClassCreatedFrom, formatDate } from '@/utils'
+import { cn, formatClassCreatedFrom, formatClientPlatform, formatDate } from '@/utils'
 
 function canToggleMarketplace(status: string): boolean {
   return status === 'active' || status === 'disabled'
@@ -137,6 +137,7 @@ export default function ClassList() {
           'Marketplace',
           'Status',
           'Created from',
+          'Platform',
           'Created',
           'Actions',
         ]}
@@ -182,6 +183,7 @@ export default function ClassList() {
                 </span>
               </td>
               <td className="px-4 py-3">{formatClassCreatedFrom(item.createdFrom)}</td>
+              <td className="px-4 py-3">{formatClientPlatform(item.clientPlatform)}</td>
               <td className="px-4 py-3">{formatDate(item.createdAt)}</td>
               <td className="px-4 py-3">
                 <Button variant="outline" size="sm" asChild>
